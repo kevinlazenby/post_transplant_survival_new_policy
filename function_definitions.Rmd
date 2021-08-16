@@ -1,0 +1,1145 @@
+---
+title: "function_definitions"
+author: "Kevin Lazenby"
+date: "7/22/2021"
+output:
+  html_document:
+    theme: cosmo
+    toc: yes
+  rmdformats::material:
+    highlight: tango
+---
+
+This is a script that defines functions that are used elsewhere in the analysis.
+This script must be run first in order to run all other scripts.
+
+# Setup
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(comment = NA, prompt = FALSE, cache = FALSE, echo = TRUE,
+                      results = "asis")
+
+library(knitr)
+library(tidyverse)
+library(haven)
+library(rmdformats)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(survival)
+library(survminer)
+library(vistime)
+library(stargazer)
+library(kableExtra)
+library(summarytools)
+library(here)
+
+here::i_am("function_definitions.Rmd")
+```
+
+# 1. Function to import recipient data
+
+```{r}
+import_tx_data <- function(sub_folder = NULL,
+                        file_name = NULL) {
+  
+  # Load list of transplant results
+  tx_list <- read_sas(here(sub_folder, file_name), NULL) %>%  
+    zap_formats() %>% zap_labels()
+  
+  # Remove extraneous variables from tx_list
+  tx_list <- tx_list %>% select(PX_ID, TX_ID, CAN_LISTING_DT,CAN_AGE_AT_LISTING,
+                              REC_TX_DT, TFL_LASTATUS, TFL_LAFUDATE,
+                              REC_AGE_AT_TX, REC_TX_TY, CAN_REM_CD,
+                              PERS_OPTN_DEATH_DT, PERS_RESTRICT_DEATH_DT,
+                              PERS_SSA_DEATH_DT, TFL_DEATH_DT, CAN_GENDER,
+                              DON_GENDER, REC_BMI, CAN_RACE, CAN_RACE_SRTR,
+                              CAN_ETHNICITY_SRTR, CAN_DIAB_TY, CAN_MALIG,
+                              CAN_CEREB_VASC, CAN_DGN, REC_CREAT, REC_TOT_BILI,
+                              REC_MED_COND, REC_INFECT_IV_DRUG, REC_INOTROP,
+                              REC_VENTILATOR, REC_VAD_TY, REC_LIFE_SUPPORT,
+                              REC_IABP, REC_ECMO, REC_VAD_TAH, CAN_ABO,
+                              CAN_LAST_STAT, REC_HR_ISCH, REC_VAD1, REC_VAD2,
+                              REC_DIAL, REC_WGT_KG) %>%
+    
+    mutate(list_date = CAN_LISTING_DT, tx_date = REC_TX_DT, 
+           last_status = TFL_LASTATUS, last_fu_date = TFL_LAFUDATE, 
+           rec_age = REC_AGE_AT_TX, can_age = CAN_AGE_AT_LISTING) %>%
+    
+    select(PX_ID, TX_ID, list_date, tx_date, last_status,
+           last_fu_date, rec_age, can_age, REC_TX_TY, CAN_REM_CD, PERS_OPTN_DEATH_DT,
+           PERS_RESTRICT_DEATH_DT, PERS_SSA_DEATH_DT, TFL_DEATH_DT,
+           CAN_GENDER, DON_GENDER, REC_BMI, CAN_RACE, CAN_RACE_SRTR,
+           CAN_ETHNICITY_SRTR, CAN_DIAB_TY, CAN_MALIG, CAN_CEREB_VASC, CAN_DGN,
+           REC_CREAT, REC_TOT_BILI, REC_MED_COND, REC_INFECT_IV_DRUG, REC_INOTROP,
+           REC_VENTILATOR, REC_VAD_TY, REC_LIFE_SUPPORT, REC_IABP, REC_ECMO,
+           REC_VAD_TAH, CAN_ABO, CAN_LAST_STAT, REC_HR_ISCH, REC_VAD1, REC_VAD2,
+           REC_DIAL, REC_WGT_KG)
+  
+  # Remove entries in which BMI is incorrectly entered
+  tx_list <- tx_list %>% filter(REC_BMI < 1000)
+}
+```
+
+# 2. Function to import follow-up data
+
+```{r}
+import_txf_data <- function(sub_folder = NULL, file_name = NULL) {
+  
+  # Load list of transplant follow-up results
+  txf_list <- read_sas(here(sub_folder, file_name), NULL) %>%  
+    zap_formats() %>% zap_labels()
+  
+  # Remove extraneous variables from txf_list
+  txf_list <- txf_list %>% select(PX_ID, TX_ID, TFL_FOL_CD, TFL_PX_STAT, 
+                                TFL_PX_STAT_DT)
+}
+```
+
+# 3. Function to apply exclusion criteria
+
+```{r}
+apply_exclusion_criteria <- function(input_tx_list = NULL) {
+  
+  # Exclude pediatric patients
+  num_pediatric_px <- nrow(input_tx_list %>% filter(can_age < 18))
+  
+  input_tx_list <- input_tx_list %>% filter(can_age >= 18)
+  
+  # Exclude multi-organ transplant recipients
+  multi_organ_recipients <- input_tx_list %>%
+    filter(REC_TX_TY == 2 | REC_TX_TY == 4) %>% 
+    select(PX_ID, REC_TX_TY)
+  
+  num_multi_organ <- nrow(input_tx_list %>% 
+                            filter(PX_ID %in% multi_organ_recipients$PX_ID))
+  
+  input_tx_list <- input_tx_list %>% 
+    filter(!(PX_ID %in% multi_organ_recipients$PX_ID))
+}
+```
+
+# 4. Function to supplement death records using SSA data
+
+```{r}
+supplement_death_records <- function(input_tx_list = NULL) {
+  
+  OPTN_deaths <- input_tx_list %>% 
+    filter(last_status != "D", !is.na(PERS_OPTN_DEATH_DT)) %>% 
+    select(PX_ID, last_status, last_fu_date, PERS_OPTN_DEATH_DT)
+  
+  RESTRICT_deaths <- input_tx_list %>% 
+    filter(last_status != "D", !is.na(PERS_RESTRICT_DEATH_DT)) %>% 
+    select(PX_ID, last_status, last_fu_date, PERS_RESTRICT_DEATH_DT)
+  
+  SSA_deaths <- input_tx_list %>%
+    filter(last_status != "D", !is.na(PERS_SSA_DEATH_DT)) %>%
+    select(PX_ID, last_status, last_fu_date, PERS_SSA_DEATH_DT)
+  
+  temp_join <- full_join(OPTN_deaths,
+                         RESTRICT_deaths %>% 
+                           select(PX_ID, PERS_RESTRICT_DEATH_DT), 
+                         by = "PX_ID", keep = FALSE)
+  
+  all_deaths <- full_join(temp_join,
+                          SSA_deaths %>% 
+                            select(PX_ID, PERS_SSA_DEATH_DT), 
+                          by = "PX_ID", keep = FALSE)
+  
+  # Use SSA death dates to amend last_status
+  for (i in seq_along(input_tx_list$PX_ID)) {
+    
+    if (input_tx_list$PX_ID[[i]] %in% all_deaths$PX_ID) {
+      
+      if (!is.na(input_tx_list$PERS_OPTN_DEATH_DT[[i]])) {
+        
+        input_tx_list$last_status[[i]] <- "D"
+        input_tx_list$last_fu_date[[i]] <- 
+          input_tx_list$PERS_OPTN_DEATH_DT[[i]]
+        
+      } else if (!is.na(input_tx_list$PERS_RESTRICT_DEATH_DT[[i]])) {
+        
+        input_tx_list$last_status[[i]] <- "D"
+        input_tx_list$last_fu_date[[i]] <- 
+          input_tx_list$PERS_RESTRICT_DEATH_DT[[i]]
+        
+      } else if (!is.na(input_tx_list$PERS_SSA_DEATH_DT[[i]])){
+        
+        input_tx_list$last_status[[i]] <- "D"
+        input_tx_list$last_fu_date[[i]] <- 
+          input_tx_list$PERS_SSA_DEATH_DT[[i]]
+      }
+    }
+  }
+  
+  input_tx_list <- input_tx_list
+    
+}
+```
+
+# 5. Function to perform data wrangling to prepare for survival modeling
+
+```{r}
+do_data_wrangling <- function(input_tx_list = NULL,
+                              pre_policy_start = NULL,
+                              pre_policy_end = NULL,
+                              post_policy_start = NULL,
+                              post_policy_end = NULL) {
+
+  input_tx_list <- input_tx_list %>%
+    filter(tx_date >= pre_policy_start & tx_date <= post_policy_end) %>%
+    mutate(policy = case_when(
+      tx_date <= pre_policy_end ~ paste0("Pre"),
+      tx_date >= post_policy_start ~  paste0("Post"),
+      tx_date > pre_policy_end &
+        tx_date < post_policy_start ~ paste0("Transition"))) %>% 
+    filter(policy != "Transition") %>%
+    
+    mutate(
+    
+      # Policy era
+      post_policy = case_when(
+        policy == "Post" ~ 1,
+        TRUE ~ 0),
+    
+      # Male gender
+      male_gender = case_when(
+        CAN_GENDER == "M" ~ 1,
+        TRUE ~ 0),
+    
+      # Race/Ethnicity
+      race_ethnicity = case_when(
+        CAN_RACE == 8 ~ paste0("WHITE"),
+        CAN_RACE == 16 ~ paste0("BLACK"),
+        CAN_RACE == 2000 ~ paste0("HISPANIC"),
+        CAN_RACE == 64 ~ paste0("ASIAN"),
+        TRUE ~ paste0("OTHER")),
+    
+      BLACK = case_when(
+        race_ethnicity == "BLACK" ~ 1,
+        TRUE ~ 0),
+      
+      HISPANIC = case_when(
+        race_ethnicity == "HISPANIC" ~ 1,
+        TRUE ~ 0),
+      
+      ASIAN = case_when(
+        race_ethnicity == "ASIAN" ~ 1,
+        TRUE ~ 0),
+      
+      OTHER = case_when(
+        race_ethnicity == "OTHER" ~ 1,
+        TRUE ~ 0),
+      
+      # Diabetes
+      diabetes = case_when(
+        CAN_DIAB_TY == 1 ~ paste0("N"),
+        CAN_DIAB_TY == 2 | 
+          CAN_DIAB_TY == 3 | 
+          CAN_DIAB_TY == 4 | 
+          CAN_DIAB_TY == 5 ~ paste0("Y")),
+      
+      diabetes = case_when(
+        diabetes == "Y" ~ 1,
+        TRUE ~ 0),
+      
+      # Cerebrovascular disease
+      CVD = case_when(
+        CAN_CEREB_VASC == "N" ~ paste0("N"),
+        CAN_CEREB_VASC == "Y" ~ paste0("Y")),
+      
+      # Malignancy
+      CAN_MALIG = case_when(
+        CAN_MALIG == "Y" ~ 1,
+        TRUE ~ 0),
+      
+      # Recipient heart failure diagnosis
+      diagnosis = case_when(
+        CAN_DGN == 999 ~ paste0("Other"),
+        CAN_DGN == 1000 ~ paste0("Dilated myopathy: idiopathic"),
+        CAN_DGN == 1001 ~ paste0("Dilated myopathy: adriamycin"),
+        CAN_DGN == 1002 ~ paste0("Dilated myopathy: post-partum"),
+        CAN_DGN == 1003 ~ paste0("Dilated myopathy: familial"),
+        CAN_DGN == 1004 ~ paste0("Dilated myopathy: myocarditis"),
+        CAN_DGN == 1005 ~ paste0("Dilated myopathy: alcoholic"),
+        CAN_DGN == 1006 ~ paste0("Dilated myopathy: viral"),
+        CAN_DGN == 1007 ~ paste0("Dilated myopathy: ischemic"),
+        CAN_DGN == 1049 ~ paste0("Dilated myopathy: other"),
+        CAN_DGN == 1050 ~ paste0("Restrictive myopathy: idiopathic"),
+        CAN_DGN == 1051 ~ paste0("Restrictive myopathy: amyloidosis"),
+        CAN_DGN == 1052 ~ paste0("Restrictive myopathy: endocardial fibrosis"),
+        CAN_DGN == 1053 ~ paste0("Restrictive myopathy: sarcoidosis"),
+        CAN_DGN == 1054 ~ paste0("Restrictive myopathy: 2/2 radiation/chemo"),
+        CAN_DGN == 1099 ~ paste0("Restrictive myopathy: other"),
+        CAN_DGN == 1100 ~ paste0("Re-tx: hyperacute rejection"),
+        CAN_DGN == 1101 ~ paste0("Re-tx: acute rejection"),
+        CAN_DGN == 1102 ~ paste0("Re-tx: coronary artery disease"),
+        CAN_DGN == 1103 ~ paste0("Re-tx: non-specific"),
+        CAN_DGN == 1104 ~ paste0("Re-tx: restrictive/constrictive"),
+        CAN_DGN == 1105 ~ paste0("Re-tx: chronic rejection"),
+        CAN_DGN == 1106 ~ paste0("Re-tx: primary failure"),
+        CAN_DGN == 1199 ~ paste0("Re-tx: other"),
+        CAN_DGN == 1200 ~ paste0("Coronary artery disease"),
+        CAN_DGN == 1201 ~ paste0("Hypertrophic cardiomyopathy"),
+        CAN_DGN == 1202 ~ paste0("Valvular heart disease"),
+        CAN_DGN == 1203 ~ paste0("Congenital heart defect: prior surgery unknown"),
+        CAN_DGN == 1206 ~ paste0("Congenital heart defect: without surgery"),
+        CAN_DGN == 1207 ~ paste0("Congenital heart defect: with surgery"),
+        CAN_DGN == 1208 ~ paste0("ARVC"),
+        CAN_DGN == 1209 ~ paste0("Muscular dystrophy: other")),
+      
+      # Binned recipient heart failure diagnosis
+      hf_etiology = case_when(
+        
+        CAN_DGN == 1000 |
+          CAN_DGN == 1001 |
+          CAN_DGN == 1002 |
+          CAN_DGN == 1003 |
+          CAN_DGN == 1004 |
+          CAN_DGN == 1005 |
+          CAN_DGN == 1006 |
+          CAN_DGN == 1049 |
+          CAN_DGN == 1002 ~ paste0("Nonischemic dilated cardiomyopathy"),
+        
+        CAN_DGN == 1007 ~ paste0("Ischemic cardiomyopathy"),
+        
+        CAN_DGN == 1203 |
+          CAN_DGN == 1206 |
+          CAN_DGN == 1207 ~ paste0("Congenital heart disease"),
+        
+        CAN_DGN == 1050 |
+          CAN_DGN == 1051 |
+          CAN_DGN == 1052 |
+          CAN_DGN == 1053 |
+          CAN_DGN == 1054 |
+          CAN_DGN == 1099 ~ paste0("Restrictive cardiomyopathy"),
+        
+        CAN_DGN == 1202 ~ paste0("Valvular heart disease"),
+        
+        CAN_DGN == 1201 ~ paste0("Hypertrophic cardiomyopathy"),
+        
+        CAN_DGN == 1100 |
+          CAN_DGN == 1101 |
+          CAN_DGN == 1102 |
+          CAN_DGN == 1103 |
+          CAN_DGN == 1104 |
+          CAN_DGN == 1105 |
+          CAN_DGN == 1106 |
+          CAN_DGN == 1199 ~ paste0("Failure of primary transplant"),
+        
+        CAN_DGN == 999 |
+          CAN_DGN == 1200 |
+          CAN_DGN == 1208 |
+          CAN_DGN == 1209 ~ paste0("Other etiology")),
+      
+      ischemic_CM = case_when(
+        hf_etiology == "Ischemic cardiomyopathy" ~ 1,
+        TRUE ~ 0),   
+      
+      congenital_heart_disease = case_when(
+        hf_etiology == "Congenital heart disease" ~ 1,
+        TRUE ~ 0),
+      
+      restrictive_CM = case_when(
+        hf_etiology == "Restrictive cardiomyopathy" ~ 1,
+        TRUE ~ 0),
+      
+      valvular_heart_disease = case_when(
+        hf_etiology == "Valvular heart disease" ~ 1,
+        TRUE ~ 0),
+      
+      hypertrophic_CM = case_when(
+        hf_etiology == "Hypertrophic cardiomyopathy" ~ 1,
+        TRUE ~ 0),
+      
+      primary_tx_failure = case_when(
+        hf_etiology == "Failure of primary transplant" ~ 1,
+        TRUE ~ 0),
+      
+      other_etiology = case_when(
+        hf_etiology == "Other etiology" ~ 1,
+        TRUE ~ 0),
+      
+      idiopathic_HF = case_when(
+        CAN_DGN == 1000 ~ 1,
+        TRUE ~ 0),
+      
+      other_etiology_IMPACT = case_when(
+        idiopathic_HF != 1 & 
+          congenital_heart_disease != 1 & 
+          ischemic_CM != 1 ~ 1,
+        TRUE ~ 0),
+      
+      # Recipient pretransplant hospitalization status
+      hosp_status = case_when(
+        REC_MED_COND == 1 ~ paste0("In ICU"),
+        REC_MED_COND == 2 ~ paste0("Hospitalized, not in ICU"),
+        REC_MED_COND == 3 ~ paste0("Not hospitalized")),
+      
+      hospitalized_not_ICU = case_when(
+        hosp_status == "Hospitalized, not in ICU" ~ 1,
+        TRUE ~ 0),
+      
+      hospitalized_in_ICU = case_when(
+        hosp_status == "In ICU" ~ 1,
+        TRUE ~ 0),
+      
+      REC_DIAL = case_when(
+        REC_DIAL == "Y" ~ 1,
+        TRUE ~ 0),
+      
+      creatinine_clearance = case_when(
+        male_gender == 1 ~
+          ((140 - rec_age) * REC_WGT_KG) / (72 * REC_CREAT),
+        male_gender == 0 ~
+          ((140 - rec_age) * REC_WGT_KG * 0.85) / (72 * REC_CREAT)),
+      
+      # Recipient pretransplant IV antibiotics
+      iv_abx = case_when(
+        REC_INFECT_IV_DRUG == "N" ~ paste0("N"),
+        REC_INFECT_IV_DRUG == "Y" ~ paste0("Y")),
+      
+      iv_abx = case_when(
+        iv_abx == "Y" ~ 1,
+        TRUE ~ 0),
+      
+      # Recipient pretransplant IV inotropes
+      inotropes = case_when(
+        REC_INOTROP == 1 ~ paste0("Y"),
+        REC_INOTROP == 0 ~ paste0("N")),
+      
+      inotropes = case_when(
+        inotropes == "Y" ~ 1,
+        TRUE ~ 0),
+      
+      high_dose_inotropes = case_when(
+        REC_INOTROP == 1 & 
+          (CAN_LAST_STAT == 2010 | 
+             CAN_LAST_STAT == 2110 | 
+             CAN_LAST_STAT == 2120 |
+             CAN_LAST_STAT == 2130) ~ 1,
+        TRUE ~ 0),
+      
+      low_dose_inotropes = case_when(
+        REC_INOTROP == 1 & 
+          !(CAN_LAST_STAT == 2010 | 
+             CAN_LAST_STAT == 2110 | 
+             CAN_LAST_STAT == 2120 |
+             CAN_LAST_STAT == 2130) ~ 1,
+        TRUE ~ 0),
+      
+      # Recipient pretransplant mechanical ventilatory support
+      ventilator = case_when(
+        REC_VENTILATOR == 1 ~ paste0("Y"),
+        REC_VENTILATOR == 0 ~ paste0("N")),
+      
+      ventilator = case_when(
+        ventilator == "Y" ~ 1,
+        TRUE ~ 0),
+      
+      # Recipient ventricular assist device type
+      VAD = case_when(
+        REC_VAD_TY == 1 ~ paste0("None"),
+        REC_VAD_TY == 2 ~ paste0("LVAD"),
+        REC_VAD_TY == 3 ~ paste0("RVAD"),
+        REC_VAD_TY == 4 ~ paste0("TAH"),
+        REC_VAD_TY == 5 ~ paste0("LVAD+RVAD")),
+      
+      LVAD = case_when(
+        VAD == "LVAD" ~ 1,
+        TRUE ~ 0),
+      
+      durable_LVAD = case_when(
+        REC_VAD1 == 205 | REC_VAD1 == 224 | REC_VAD1 == 236 | REC_VAD1 == 313 | 
+          REC_VAD1 == 316 | REC_VAD1 == 330 | REC_VAD1 == 999 | 
+          REC_VAD2 == 205 | REC_VAD2 == 224 | REC_VAD2 == 236 | 
+          REC_VAD2 == 313 | REC_VAD2 == 316 | REC_VAD2 == 330 | 
+          REC_VAD2 == 999 ~ 1,
+        TRUE ~ 0),
+      
+      temporary_LVAD = case_when(
+        durable_LVAD != 1 & !is.na(REC_VAD1) ~ 1,
+        TRUE ~ 0),
+      
+      RVAD = case_when(
+        VAD == "RVAD" ~ 1,
+        TRUE ~ 0),
+      
+      TAH = case_when(
+        VAD == "TAH" ~ 1,
+        TRUE ~ 0),
+      
+      LVAD_RVAD = case_when(
+        VAD == "LVAD+RVAD" ~ 1,
+        TRUE ~ 0),
+      
+      # Recipient intra-aortic balloon pump
+      IABP = case_when(
+        REC_IABP == 1 ~ paste0("Y"),
+        REC_IABP == 0 ~ paste0("N")),
+      
+      IABP = case_when(
+        IABP == "Y" ~ 1,
+        TRUE ~ 0),
+      
+      # Recipient extracorporeal membrane oxygenation
+      ECMO = case_when(
+        REC_ECMO == 1 ~ paste0("Y"),
+        REC_ECMO == 0 ~ paste0("N")),
+      
+      ECMO = case_when(
+        ECMO == "Y" ~ 1,
+        TRUE ~ 0),
+      
+      other_MCS = case_when(
+        REC_VAD_TY != 1 & durable_LVAD == 0 ~ 1,
+        TRUE ~ 0),
+      
+      no_MCS = case_when(
+        ECMO == 0 & 
+          IABP == 0 & 
+          ventilator == 0 & 
+          durable_LVAD == 0 & 
+          other_MCS == 0 ~ 1,
+        TRUE ~ 0),
+      
+      # Recipient last waitlist status
+      list_status = case_when(
+        CAN_LAST_STAT == 2010 ~ paste0("Old Status 1A"),
+        CAN_LAST_STAT == 2020 ~ paste0("Old Status 1B"),
+        CAN_LAST_STAT == 2030 ~ paste0("Old Status 2"),
+        CAN_LAST_STAT == 2110 ~ paste0("New Status 1"),
+        CAN_LAST_STAT == 2120 ~ paste0("New Status 2"),
+        CAN_LAST_STAT == 2130 ~ paste0("New Status 3"),
+        CAN_LAST_STAT == 2140 ~ paste0("New Status 4"),
+        CAN_LAST_STAT == 2150 ~ paste0("New Status 5"),
+        CAN_LAST_STAT == 2160 ~ paste0("New Status 6")),
+      
+      # Recipient time on the waitlist
+      waitlist_time = as.numeric(tx_date - list_date),
+      
+      # Recipient survival time (or time at risk) for survival modeling
+      surv_time = as.numeric(last_fu_date - tx_date),
+      
+      # Recipient survival time, administratively censored at 1 year
+      surv_time_365 = ifelse(surv_time >= 365, 365, surv_time),
+      
+      # Recipient survival status for survival modeling
+      status = case_when(
+        (last_status == "A" | last_status == "L" | last_status == "N") ~ 0,
+        (last_status == "D" | last_status == "R") ~ 1),
+      
+      # Recipient survival status, administratively censored at 1 year
+      status_365 = ifelse(surv_time >= 365, 0, status)) %>% 
+    
+    select(PX_ID:can_age, CAN_GENDER:REC_BMI, CAN_MALIG, REC_CREAT:REC_TOT_BILI,
+           CAN_ABO, REC_HR_ISCH:status_365)
+  
+}
+```
+
+# 6. Function to truncate follow-up at a specific analysis date
+
+```{r}
+truncate_follow_up <- function(input_cohort_list = NULL,
+                               input_follow_up_list = NULL,
+                               analysis_date = NULL) {
+  
+  # Selecting the most recent follow-up information
+  input_follow_up_list <- input_follow_up_list %>% 
+    filter(TFL_PX_STAT_DT <= analysis_date) %>% 
+    group_by(PX_ID) %>% 
+    slice_max(TFL_PX_STAT_DT, with_ties = FALSE) %>% 
+    ungroup()
+  
+  # Adding follow-up information to cohort list
+  input_cohort_list <- input_cohort_list %>% 
+    left_join(input_follow_up_list %>% 
+                select(PX_ID, TFL_PX_STAT, TFL_PX_STAT_DT), by = "PX_ID")
+  
+  # Replacing most recent follow-up information with last available follow-up
+  # information at the time the analysis was performed
+  for (i in seq_along(input_cohort_list$PX_ID)) {
+    
+    if (input_cohort_list$last_fu_date[[i]] > analysis_date) {
+      
+      if (!is.na(input_cohort_list$TFL_PX_STAT_DT[[i]]) &&
+          !is.na(input_cohort_list$TFL_PX_STAT[[i]])) {
+        
+        input_cohort_list$last_fu_date[[i]] <- 
+          input_cohort_list$TFL_PX_STAT_DT[[i]]
+        
+        input_cohort_list$last_status[[i]] <- 
+          input_cohort_list$TFL_PX_STAT[[i]]
+        
+      } else {
+        
+        input_cohort_list$last_fu_date[[i]] <- analysis_date
+        input_cohort_list$last_status[[i]] <- "N"
+      }
+    }
+  }
+  
+  input_cohort_list <- input_cohort_list %>% 
+    
+    select(-TFL_PX_STAT, -TFL_PX_STAT_DT) %>% 
+    
+    mutate(surv_time = as.numeric(last_fu_date - tx_date),
+           
+           surv_time_365 = ifelse(surv_time >= 365, 365, surv_time),
+           status = case_when(
+            (last_status == "A" | last_status == "L" | last_status == "N") ~ 0,
+            (last_status == "D" | last_status == "R") ~ 1),
+           
+           status_365 = ifelse(surv_time >= 365, 0, status))
+}
+```
+
+# 7. Function to create a custom theme for plotting
+
+```{r}
+custom_theme <- function() {
+  theme_light() %+replace%
+    theme(
+      plot.title=element_text(hjust=0.5, margin = margin(0,0,10,0))
+    )
+}
+```
+
+# 8. Function to construct a Kaplan-Meier survival model
+
+```{r}
+construct_km_model <- function(input_cohort_list = NULL,
+                               y_limits = c(0, 1),
+                               legend_position = c(0.9, 0.8),
+                               plot_title = "1-year K-M survival analysis",
+                               risk_table_fontsize = 4.5) {
+  
+  mean_surv_time_by_cohort <- c(
+    pre_policy = input_cohort_list %>% 
+      filter(post_policy == 0) %>% 
+      select(surv_time) %>% 
+      descr(stats = "fivenum"),
+    
+    post_policy = input_cohort_list %>% 
+      filter(post_policy == 1) %>% 
+      select(surv_time) %>% 
+      descr(stats = "fivenum"))
+  
+  survival_object <- surv_fit(Surv(surv_time, status) ~ post_policy,
+                             data = input_cohort_list,
+                             stype = 1,
+                             ctype = 1,
+                             conf.type = "log")
+  
+  survival_plot <- ggsurvplot(
+    survival_object,                 
+    pval = TRUE,                     
+    conf.int = TRUE,                 
+    conf.int.style = "ribbon",       
+    xlab = "Time (days)",            
+    break.time.by = 90,              
+    ggtheme = custom_theme(),        
+    risk.table = "absolute",         
+    risk.table.height = 0.25,        
+    risk.table.y.text.col = TRUE,    
+    risk.table.y.text = TRUE,
+    risk.table.fontsize = risk_table_fontsize,
+    ncensor.plot = FALSE,
+    surv.median.line = "none", 
+    legend.labs = 
+      c("Pre-policy", "Post-policy"),
+    legend = legend_position,          
+    palette = "jama",             
+    xlim = c(0, 365),             
+    linetype = c("solid", "solid"), 
+    ylim = y_limits,     
+    censor = FALSE,        
+    title = plot_title)
+  
+  log_rank_test <- survdiff(Surv(surv_time_365, status_365) ~ post_policy, 
+                            data = input_cohort_list)
+  
+  survival_summary <- surv_summary(survival_object)
+  
+  survival_by_policy <- list(survival_object, survival_plot, log_rank_test, 
+                               survival_summary, mean_surv_time_by_cohort)
+  
+}
+```
+
+# 9. Function to construct a Cox proportional hazards model
+
+```{r}
+construct_univariate_cox_ph_models <- function(input_cohort_list = NULL) {
+
+  cox_ph_policy <- coxph(Surv(surv_time_365, status_365) ~ post_policy,
+                         data = input_cohort_list) %>% summary()
+  
+  cox_ph_gender <- coxph(Surv(surv_time_365, status_365) ~ male_gender,
+                         data = input_cohort_list) %>% summary()
+  
+  cox_ph_age <- coxph(Surv(surv_time_365, status_365) ~ rec_age,
+                      data = input_cohort_list) %>% summary()
+  
+  cox_ph_BMI <- coxph(Surv(surv_time_365, status_365) ~ REC_BMI,
+                      data = input_cohort_list) %>% summary()
+  
+  cox_ph_BLACK <- coxph(Surv(surv_time_365, status_365) ~ BLACK,
+                        data = input_cohort_list) %>% summary()
+  
+  cox_ph_HISPANIC <- coxph(Surv(surv_time_365, status_365) ~ HISPANIC,
+                           data = input_cohort_list) %>% summary()
+  
+  cox_ph_ASIAN <- coxph(Surv(surv_time_365, status_365) ~ ASIAN,
+                        data = input_cohort_list) %>% summary()
+  
+  cox_ph_OTHER <- coxph(Surv(surv_time_365, status_365) ~ OTHER,
+                        data = input_cohort_list) %>% summary()
+  
+  cox_ph_diabetes <- coxph(Surv(surv_time_365, status_365) ~ diabetes,
+                           data = input_cohort_list) %>% summary()
+  
+  cox_ph_malignancy <- coxph(Surv(surv_time_365, status_365) ~ CAN_MALIG,
+                             data = input_cohort_list) %>% summary()
+  
+  cox_ph_cvd <- coxph(Surv(surv_time_365, status_365) ~ CVD,
+                      data = input_cohort_list) %>% summary()
+  
+  cox_ph_ischemic_CM <- coxph(Surv(surv_time_365, status_365) ~ ischemic_CM,
+                              data = input_cohort_list) %>% summary()
+  
+  cox_ph_congenital_heart_disease <- coxph(Surv(surv_time_365, status_365) ~
+                                             congenital_heart_disease,
+                                           data = input_cohort_list) %>% summary()
+  
+  cox_ph_restrictive_CM <- coxph(Surv(surv_time_365, status_365) ~ restrictive_CM,
+                                 data = input_cohort_list) %>% summary()
+  
+  cox_ph_valvular_heart_disease <- coxph(Surv(surv_time_365, status_365) ~
+                                           valvular_heart_disease,
+                                         data = input_cohort_list) %>% summary()
+  
+  cox_ph_hypertrophic_CM <- coxph(Surv(surv_time_365, status_365) ~ hypertrophic_CM,
+                                  data = input_cohort_list) %>% summary()
+  
+  cox_ph_primary_tx_failure <- coxph(Surv(surv_time_365, status_365) ~ primary_tx_failure,
+                                     data = input_cohort_list) %>% summary()
+  
+  cox_ph_other_etiology <- coxph(Surv(surv_time_365, status_365) ~ other_etiology,
+                                 data = input_cohort_list) %>% summary()
+  
+  cox_ph_bilirubin <- coxph(Surv(surv_time_365, status_365) ~ REC_TOT_BILI,
+                            data = input_cohort_list) %>% summary()
+  
+  cox_ph_creatinine <- coxph(Surv(surv_time_365, status_365) ~ REC_CREAT,
+                             data = input_cohort_list) %>% summary()
+  
+  cox_ph_hospitalized_not_ICU <- coxph(Surv(surv_time_365, status_365) ~
+                                         hospitalized_not_ICU,
+                                       data = input_cohort_list) %>% summary()
+  
+  cox_ph_hospitalized_in_ICU <- coxph(Surv(surv_time_365, status_365) ~
+                                        hospitalized_in_ICU,
+                                      data = input_cohort_list) %>% summary()
+  
+  cox_ph_iv_abx <- coxph(Surv(surv_time_365, status_365) ~ iv_abx,
+                         data = input_cohort_list) %>% summary()
+  
+  cox_ph_high_dose_inotropes <- coxph(Surv(surv_time_365, status_365) ~ 
+                                        high_dose_inotropes,
+                            data = input_cohort_list) %>% summary()
+
+  cox_ph_low_dose_inotropes <- coxph(Surv(surv_time_365, status_365) ~ 
+                                        low_dose_inotropes,
+                            data = input_cohort_list) %>% summary()
+  
+  cox_ph_vent <- coxph(Surv(surv_time_365, status_365) ~ ventilator,
+                       data = input_cohort_list) %>% summary()
+  
+  cox_ph_durable_LVAD <- coxph(Surv(surv_time_365, status_365) ~ durable_LVAD,
+                       data = input_cohort_list) %>% summary()
+  
+  cox_ph_other_MCS <- coxph(Surv(surv_time_365, status_365) ~ other_MCS,
+                       data = input_cohort_list) %>% summary()
+
+  cox_ph_no_MCS <- coxph(Surv(surv_time_365, status_365) ~ no_MCS,
+                       data = input_cohort_list) %>% summary()
+  
+  cox_ph_iabp <- coxph(Surv(surv_time_365, status_365) ~ IABP,
+                       data = input_cohort_list) %>% summary()
+  
+  cox_ph_ecmo <- coxph(Surv(surv_time_365, status_365) ~ ECMO,
+                       data = input_cohort_list) %>% summary()
+  
+  cox_ph_waitlist_time <- coxph(Surv(surv_time_365, status_365) ~ waitlist_time,
+                                data = input_cohort_list) %>% summary()
+  
+  cox_ph_univariate_results <- tibble(
+  
+    "Transplant after policy change" = c(
+      round(cox_ph_policy$coefficients[,2], digits = 2),
+      round(cox_ph_policy$coefficients[,5], digits = 2)),    
+    
+    "Male sex" = c(
+      round(cox_ph_gender$coefficients[,2], digits = 2),
+      round(cox_ph_gender$coefficients[,5], digits = 2)),
+    
+    "Age (per 1 year)" = c(
+      round(cox_ph_age$coefficients[,2], digits = 2),
+      round(cox_ph_age$coefficients[,5], digits = 2)),
+    
+    "BMI (per 1 unit)" = c(
+      round(cox_ph_BMI$coefficients[,2], digits = 2),
+      round(cox_ph_BMI$coefficients[,5], digits = 2)),
+    
+    "Black" = c(
+      round(cox_ph_BLACK$coefficients[,2], digits = 2),
+      round(cox_ph_BLACK$coefficients[,5], digits = 2)),
+    
+    "Hispanic" = c(
+      round(cox_ph_HISPANIC$coefficients[,2], digits = 2),
+      round(cox_ph_HISPANIC$coefficients[,5], digits = 2)),
+    
+    "Asian" = c(
+      round(cox_ph_ASIAN$coefficients[,2], digits = 2),
+      round(cox_ph_ASIAN$coefficients[,5], digits = 2)),
+    
+    "Other" = c(
+      round(cox_ph_OTHER$coefficients[,2], digits = 2),
+      round(cox_ph_OTHER$coefficients[,5], digits = 2)),
+    
+    "Diabetes" = c(
+      round(cox_ph_diabetes$coefficients[,2], digits = 2),
+      round(cox_ph_diabetes$coefficients[,5], digits = 2)),
+    
+    "Malignancy" = c(
+      round(cox_ph_malignancy$coefficients[,2], digits = 2),
+      round(cox_ph_malignancy$coefficients[,5], digits = 2)),
+    
+    "Cerebrovascular disease" = c(
+      round(cox_ph_cvd$coefficients[,2], digits = 2),
+      round(cox_ph_cvd$coefficients[,5], digits = 2)),
+    
+    "Ischemic cardiomyopathy" = c(
+      round(cox_ph_ischemic_CM$coefficients[,2], digits = 2),
+      round(cox_ph_ischemic_CM$coefficients[,5], digits = 2)),
+    
+    "Congenital heart disease" = c(
+      round(cox_ph_congenital_heart_disease$coefficients[,2], digits = 2),
+      round(cox_ph_congenital_heart_disease$coefficients[,5], digits = 2)),
+    
+    "Restrictive cardiomyopathy" = c(
+      round(cox_ph_restrictive_CM$coefficients[,2], digits = 2),
+      round(cox_ph_restrictive_CM$coefficients[,5], digits = 2)),
+    
+    "Valvular heart disease" = c(
+      round(cox_ph_valvular_heart_disease$coefficients[,2], digits = 2),
+      round(cox_ph_valvular_heart_disease$coefficients[,5], digits = 2)),  
+    
+    "Failure of primary transplant" = c(
+      round(cox_ph_primary_tx_failure$coefficients[,2], digits = 2),
+      round(cox_ph_primary_tx_failure$coefficients[,5], digits = 2)),
+    
+    "Hypertrophic cardiomyopathy" = c(
+      round(cox_ph_hypertrophic_CM$coefficients[,2], digits = 2),
+      round(cox_ph_hypertrophic_CM$coefficients[,5], digits = 2)),
+    
+    "Other etiology" = c(
+      round(cox_ph_other_etiology$coefficients[,2], digits = 2),
+      round(cox_ph_other_etiology$coefficients[,5], digits = 2)),
+    
+    "Total bilirubin (per 1 mg/dL)" = c(
+      round(cox_ph_bilirubin$coefficients[,2], digits = 2),
+      round(cox_ph_bilirubin$coefficients[,5], digits = 2)),  
+    
+    "Serum creatinine (per 1 mg/dL)" = c(
+      round(cox_ph_creatinine$coefficients[,2], digits = 2),
+      round(cox_ph_creatinine$coefficients[,5], digits = 2)),
+    
+    "In ICU" = c(
+      round(cox_ph_hospitalized_in_ICU$coefficients[,2], digits = 2),
+      round(cox_ph_hospitalized_in_ICU$coefficients[,5], digits = 2)),
+    
+    "Hospitalized, not in ICU" = c(
+      round(cox_ph_hospitalized_not_ICU$coefficients[,2], digits = 2),
+      round(cox_ph_hospitalized_not_ICU$coefficients[,5], digits = 2)),
+    
+    "IV antibiotics in 2 weeks before transplant" = c(
+      round(cox_ph_iv_abx$coefficients[,2], digits = 2),
+      round(cox_ph_iv_abx$coefficients[,5], digits = 2)),
+    
+    "High dose IV inotropes" = c(
+      round(cox_ph_high_dose_inotropes$coefficients[,2], digits = 2),
+      round(cox_ph_high_dose_inotropes$coefficients[,5], digits = 2)),
+    
+    "Low dose IV inotropes" = c(
+      round(cox_ph_low_dose_inotropes$coefficients[,2], digits = 2),
+      round(cox_ph_low_dose_inotropes$coefficients[,5], digits = 2)),
+    
+    "Ventilator support" = c(
+      round(cox_ph_vent$coefficients[,2], digits = 2),
+      round(cox_ph_vent$coefficients[,5], digits = 2)),
+    
+    "IABP" = c(
+      round(cox_ph_iabp$coefficients[,2], digits = 2),
+      round(cox_ph_iabp$coefficients[,5], digits = 2)),
+    
+    "ECMO" = c(
+      round(cox_ph_ecmo$coefficients[,2], digits = 2),
+      round(cox_ph_ecmo$coefficients[,5], digits = 2)),
+    
+    "Durable left ventricular assist device" = c(
+      round(cox_ph_durable_LVAD$coefficients[,2], digits = 2),
+      round(cox_ph_durable_LVAD$coefficients[,5], digits = 2)),
+    
+    "Other MCS" = c(
+      round(cox_ph_other_MCS$coefficients[,2], digits = 2),
+      round(cox_ph_other_MCS$coefficients[,5], digits = 2)),
+    
+    "No MCS" = c(
+      round(cox_ph_no_MCS$coefficients[,2], digits = 2),
+      round(cox_ph_no_MCS$coefficients[,5], digits = 2)),
+    
+    "Waitlist time (per 1 day)" = c(
+      round(cox_ph_waitlist_time$coefficients[,2], digits = 2),
+      round(cox_ph_waitlist_time$coefficients[,5], digits = 2)))  
+  
+  cox_ph_univariate_results_table <- cox_ph_univariate_results %>%
+      t() %>% 
+      kbl(align = "c",
+          caption = "<b>Results of Exploratory Univariate Cox PH Models<b>") %>%
+      add_header_above(c("Covariate" = 1, "Hazard ratio" = 1, "p-value" = 1)) %>%
+      pack_rows(group_label = "Race/Ethnicity (reference: White)",
+                start_row = 5,
+                end_row = 8) %>%
+      pack_rows(group_label = "Heart failure etiology (reference: nonischemic dilated)",
+                start_row = 12,
+                end_row = 18) %>%
+      pack_rows(group_label = "Pretransplant hospitalization status (reference: not hospitalized)",
+                start_row = 21,
+                end_row = 22) %>%
+      kable_styling()
+}
+```
+
+# 10. Function to calculate administrative censoring and death percentages
+
+```{r}
+
+calculate_censoring_percentages <- function(input_cohort_list = NULL) {
+  
+  # Number of patients censored in each cohort
+  num_censored_px <- c(
+    pre_policy = input_cohort_list %>% 
+      filter(post_policy == 0,
+             last_status == "A" | last_status == "L" | last_status == "N") %>% 
+      nrow(),
+    
+    post_policy = input_cohort_list %>% 
+      filter(post_policy == 1,
+             last_status == "A" | last_status == "L" | last_status == "N") %>% 
+      nrow()) 
+  
+  # Number of patients censored before 1 year in each cohort
+  num_censored_px_1_year <- c(
+    
+    pre_policy = input_cohort_list %>% 
+      filter(post_policy == 0,
+             surv_time < 365,
+             last_status == "A" | last_status == "L" | last_status == "N") %>% 
+      nrow(),
+    
+    post_policy = input_cohort_list %>% 
+      filter(post_policy == 1,
+             surv_time < 365,
+             last_status == "A" | last_status == "L" | last_status == "N") %>% 
+      nrow()) 
+  
+  # Number of patients who died or were retransplanted in each cohort
+  num_deaths <- c(
+    pre_policy = input_cohort_list %>% 
+      filter(post_policy == 0,
+             last_status == "D" | last_status == "R") %>%
+      nrow(),
+    
+    post_policy = input_cohort_list %>% 
+      filter(post_policy == 1,
+             last_status == "D" | last_status == "R") %>%
+      nrow())
+  
+  # Number of patients who died or were retransplanted before 1 year
+  num_deaths_1_year <- c(
+    pre_policy = input_cohort_list %>% 
+      filter(post_policy == 0,
+             surv_time < 365,
+             last_status == "D" | last_status == "R") %>%
+      nrow(),
+    
+    post_policy = input_cohort_list %>% 
+      filter(post_policy == 1,
+             surv_time < 365,
+             last_status == "D" | last_status == "R") %>%
+      nrow())
+  
+  # Percent of patients censored in each cohort
+  censor_pct <- c(
+    pre_policy = num_censored_px[1] / (num_censored_px[1] + num_deaths[1]),
+    post_policy = num_censored_px[2] / (num_censored_px[2] + num_deaths[2]))  
+  
+  # Percent of patients censored in each cohort in 1 year
+  censor_pct_1_year <- c(
+    pre_policy = num_censored_px_1_year[1] / 
+      (num_censored_px[1] + num_deaths[1]),
+    
+    post_policy = num_censored_px_1_year[2] / 
+      (num_censored_px[2] + num_deaths[2]))  
+
+  # Percent of patients who died or were retransplanted in each cohort
+  death_pct <- c(
+    pre_policy = 1 - censor_pct[1], 
+    post_policy = 1 - censor_pct[2])  
+    
+  # Percent of patients who died or were retransplanted before 1 year
+  death_pct_1_year <- c(
+    
+    pre_policy = num_deaths_1_year[1] / 
+      (num_censored_px[1] + num_deaths[1]),
+    
+    post_policy = num_deaths_1_year[2] / 
+      (num_censored_px[2] + num_deaths[2]))
+
+  results_list <- tibble(
+    policy_era = c("Pre-policy", "Post-policy"),
+    num_censored_px,
+    num_censored_px_1_year,
+    censor_pct,
+    censor_pct_1_year,    
+    num_deaths,
+    num_deaths_1_year,
+    death_pct,
+    death_pct_1_year)
+}
+
+```
+
+# 11. Function to create violin plot to show follow-up time
+
+```{r}
+create_violin_plot <- function(adequate_follow_up_list = NULL, 
+                               truncated_follow_up_list = NULL,
+                               truncated_follow_up_list_2 = NULL,
+                               truncated_follow_up_list_3 = NULL,
+                               post_policy_cohort = TRUE) {
+
+  if (post_policy_cohort == TRUE) {
+    
+    violin_plot_data_temp_1 <- tibble(
+    
+    adequate_follow_up_list %>%
+      filter(post_policy == 1) %>% 
+      select(surv_time),
+    
+    follow_up = "full follow-up",
+    fill_color = "adequate")
+  
+    violin_plot_data_temp_2 <- tibble(
+      truncated_follow_up_list %>%
+        filter(post_policy == 1) %>% 
+        select(surv_time),
+    
+      follow_up = "truncated at Nov. 1, 2019",
+      fill_color = "truncated")
+    
+    violin_plot_data_temp_3 <- tibble(
+      truncated_follow_up_list_2 %>%
+        filter(post_policy == 1) %>% 
+        select(surv_time),
+    
+      follow_up = "truncated at May 1, 2020",
+      fill_color = "truncated")
+    
+    violin_plot_data_temp_4 <- tibble(
+      truncated_follow_up_list_3 %>%
+        filter(post_policy == 1) %>% 
+        select(surv_time),
+    
+      follow_up = "truncated at Nov. 1, 2020",
+      fill_color = "truncated")
+    
+    violin_plot_data <- rbind(violin_plot_data_temp_1, violin_plot_data_temp_2,
+                              violin_plot_data_temp_3, violin_plot_data_temp_4)
+    
+    violin_plot_data$follow_up <- factor(violin_plot_data$follow_up,
+                                         levels = c(
+                                         "truncated at Nov. 1, 2019",
+                                         "truncated at May 1, 2020",
+                                         "truncated at Nov. 1, 2020",
+                                         "full follow-up"))
+    
+    violin_plot <- ggplot(data = violin_plot_data,
+                          
+                          mapping = aes(x = follow_up, 
+                                        y = surv_time, 
+                                        fill = fill_color, 
+                                        color = fill_color)) +
+      
+      geom_violin(trim = TRUE,
+                  draw_quantiles = seq(0.25, 0.75, 0.25), 
+                  scale = "count") +
+      
+      labs(title = NULL, # "Survival time by follow-up method (post-policy cohort)",
+           x = "Follow-up method", y = "Survival time (days)") +
+      
+      scale_y_continuous(breaks = seq(0, 1000, 90)) +
+      scale_fill_jama() +
+      custom_theme() +
+      theme(legend.position = "none") +
+      scale_color_manual(values = c("white", "black", "black", "black")) +
+      rremove("x.grid")
+  
+  } else {
+    
+    violin_plot_data_temp_1 <- tibble(
+    
+    adequate_follow_up_list %>%
+      filter(post_policy == 0) %>% 
+      select(surv_time),
+    
+      follow_up = "adequate")
+  
+    violin_plot_data_temp_2 <- tibble(
+      truncated_follow_up_list %>%
+        filter(post_policy == 0) %>% 
+        select(surv_time),
+    
+      follow_up = "truncated")
+    
+    violin_plot_data <- rbind(violin_plot_data_temp_1, violin_plot_data_temp_2)
+    
+    violin_plot_data$follow_up <- as.factor(violin_plot_data$follow_up)
+    
+    violin_plot <- ggplot(data = violin_plot_data,
+                          
+                          mapping = aes(x = follow_up, 
+                                        y = surv_time, 
+                                        fill = follow_up, 
+                                        color = follow_up)) +
+      
+      geom_violin(trim = TRUE,
+                  draw_quantiles = seq(0.25, 0.75, 0.25), 
+                  scale = "count") +
+      
+      labs(title = NULL, # "Survival time by follow-up method (pre-policy cohort)",
+           x = "Follow-up method", y = "Survival time (days)") +
+      
+      scale_y_continuous(breaks = seq(0, 2000, 180)) +
+      scale_fill_jama() +
+      custom_theme() +
+      theme(legend.position = "none") +
+      scale_color_manual(values = c("white", "black"))     
+    
+  }
+}
+```

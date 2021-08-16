@@ -1,0 +1,764 @@
+---
+title: "recipient_characteristics"
+author: "Kevin Lazenby"
+date: "6/25/2021"
+output:
+  rmarkdown: html_vignette
+---
+
+# Setup
+
+```{r, setup, include=FALSE}
+
+knitr::opts_chunk$set(comment = NA, prompt = FALSE, cache = FALSE, echo = TRUE,
+                      results = "asis", warning = FALSE)
+
+library(knitr)
+library(tidyverse)
+library(haven)
+library(rmdformats)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(survival)
+library(survminer)
+library(vistime)
+library(stargazer)
+library(kableExtra)
+library(here)
+library(summarytools)
+library(ggsci)
+library(magrittr)
+
+st_options(style = "rmarkdown", plain.ascii = FALSE, footnote = NA)
+```
+
+# 1. Characteristics of Heart Transplant Recipients Stratified by Policy Era
+
+```{r}
+cohort_list <- tx_list_cohort_1
+num_tx_per_cohort <- num_tx_per_cohort_1
+
+# Gender
+gender_contingency <- cohort_list %$%
+  ctable(x = post_policy, y = CAN_GENDER)
+
+gender_chisq <- chisq.test(gender_contingency$cross_table[1:2, 1:2])
+
+# Age
+age_descr <- descr(cohort_list %>% 
+                    group_by(post_policy) %>% 
+                    select(rec_age),
+                    stats = "fivenum")
+
+age_wilcoxon <- wilcox.test(cohort_list %>%
+                              filter(post_policy == 0) %>% 
+                              pull(rec_age),
+                            cohort_list %>%
+                              filter(post_policy == 1) %>% 
+                              pull(rec_age))
+
+# BMI
+BMI_descr <- descr(cohort_list %>% 
+                    group_by(post_policy) %>% 
+                    select(REC_BMI),
+                    stats = "fivenum")
+
+BMI_wilcoxon <- wilcox.test(cohort_list %>%
+                              filter(post_policy == 0) %>% 
+                              pull(REC_BMI),
+                            cohort_list %>%
+                              filter(post_policy == 1) %>% 
+                              pull(REC_BMI))
+
+# Race/Ethnicity
+race_ethnicity_contingency <- ctable(x = cohort_list$post_policy, 
+                             y = cohort_list$race_ethnicity)
+
+race_ethnicity_chisq <- chisq.test(race_ethnicity_contingency$cross_table[1:2, 1:5])
+
+# Diabetes
+diabetes_contingency <- ctable(x = cohort_list$post_policy, 
+                             y = cohort_list$diabetes)
+
+diabetes_chisq <- chisq.test(diabetes_contingency$cross_table[1:2, 1:2])
+
+# Malignancy
+malig_contingency <- ctable(x = cohort_list$post_policy, 
+                             y = cohort_list$CAN_MALIG)
+
+malig_chisq <- chisq.test(malig_contingency$cross_table[1:2, 1:2])
+
+# Cerebrovascular disease
+cvd_contingency <- ctable(x = cohort_list$post_policy, 
+                             y = cohort_list$CVD)
+
+cvd_chisq <- chisq.test(cvd_contingency$cross_table[1:2, 1:2])
+
+# Heart failure etiology
+hf_etiology_contingency <- ctable(x = cohort_list$post_policy,
+                                  y = cohort_list$hf_etiology)
+
+hf_etiology_chisq <- chisq.test(hf_etiology_contingency$cross_table[1:2, 1:8])
+                                
+# Creatinine
+creatinine_descr <- descr(cohort_list %>% 
+                    group_by(post_policy) %>% 
+                    select(REC_CREAT),
+                    stats = "fivenum")
+
+creatinine_wilcoxon <- wilcox.test(cohort_list %>%
+                              filter(post_policy == 0) %>% 
+                              pull(REC_CREAT),
+                            cohort_list %>%
+                              filter(post_policy == 1) %>% 
+                              pull(REC_CREAT))
+
+# Bilirubin
+bilirubin_descr <- descr(cohort_list %>% 
+                    group_by(post_policy) %>% 
+                    select(REC_TOT_BILI),
+                    stats = "fivenum")
+
+bilirubin_wilcoxon <- wilcox.test(cohort_list %>%
+                              filter(post_policy == 0) %>% 
+                              pull(REC_TOT_BILI),
+                            cohort_list %>%
+                              filter(post_policy == 1) %>% 
+                              pull(REC_TOT_BILI))
+
+# Hospitalization status
+hosp_contingency <- ctable(x = cohort_list$post_policy, 
+                             y = cohort_list$hosp_status)
+
+hosp_chisq <- chisq.test(hosp_contingency$cross_table[1:2, 1:3])
+
+# IV antibiotics before transplant
+iv_abx_contingency <- ctable(x = cohort_list$post_policy, 
+                             y = cohort_list$iv_abx)
+
+iv_abx_chisq <- chisq.test(iv_abx_contingency$cross_table[1:2, 1:2])
+
+# High dose IV inotropes before transplant
+high_dose_inotropes_contingency <- ctable(x = cohort_list$post_policy,
+                             y = cohort_list$high_dose_inotropes)
+
+high_dose_inotropes_chisq <- 
+  chisq.test(high_dose_inotropes_contingency$cross_table[1:2, 1:2])
+
+# Low dose IV inotropes before transplant
+low_dose_inotropes_contingency <- ctable(x = cohort_list$post_policy,
+                             y = cohort_list$low_dose_inotropes)
+
+low_dose_inotropes_chisq <- 
+  chisq.test(low_dose_inotropes_contingency$cross_table[1:2, 1:2])
+
+# Ventilator support before transplant
+vent_contingency <- ctable(x = cohort_list$post_policy,
+                             y = cohort_list$ventilator)
+
+vent_chisq <- chisq.test(vent_contingency$cross_table[1:2, 1:2])
+
+# Durable LVAD before transplant
+durable_lvad_contingency <- ctable(x = cohort_list$post_policy,
+                             y = cohort_list$durable_LVAD)
+
+durable_lvad_chisq <- chisq.test(durable_lvad_contingency$cross_table[1:2, 1:2])
+
+# Other MCS before transplant
+other_MCS_contingency <- ctable(x = cohort_list$post_policy,
+                             y = cohort_list$other_MCS)
+
+other_MCS_chisq <- chisq.test(other_MCS_contingency$cross_table[1:2, 1:2])
+
+# No MCS before transplant
+no_MCS_contingency <- ctable(x = cohort_list$post_policy,
+                             y = cohort_list$no_MCS)
+
+no_MCS_chisq <- chisq.test(no_MCS_contingency$cross_table[1:2, 1:2])
+
+# IABP
+iabp_contingency <- ctable(x = cohort_list$post_policy,
+                             y = cohort_list$IABP)
+
+iabp_chisq <- chisq.test(iabp_contingency$cross_table[1:2, 1:2])
+
+# ECMO
+ecmo_contingency <- ctable(x = cohort_list$post_policy,
+                             y = cohort_list$ECMO)
+
+ecmo_chisq <- chisq.test(ecmo_contingency$cross_table[1:2, 1:2])
+
+# Blood type
+abo_contingency <- ctable(x = cohort_list$post_policy, 
+                             y = cohort_list$CAN_ABO)
+
+abo_chisq <- chisq.test(abo_contingency$cross_table[1:2, c(1,4,5,6)])
+
+# Days on wait list
+waitlist_time_descr <- descr(cohort_list %>% 
+                    group_by(post_policy) %>% 
+                    select(waitlist_time),
+                    stats = "fivenum")
+
+waitlist_time_wilcoxon <- wilcox.test(cohort_list %>%
+                              filter(post_policy == 0) %>% 
+                              pull(waitlist_time),
+                            cohort_list %>%
+                              filter(post_policy == 1) %>% 
+                              pull(waitlist_time))
+
+# Listing status
+list_status_contingency <- ctable(x = cohort_list$post_policy,
+                                  y = cohort_list$list_status)
+
+```
+
+# 2. Assembling Table 1
+
+```{r}
+
+tx_rec_characteristics <- tibble(
+  
+  "Male" = c(
+    paste0(round(gender_contingency$cross_table[1,2], digits = 0), 
+           " (", 
+           round(gender_contingency$proportions[1,2] * 100, digits = 1),
+           ")"),
+    paste0(round(gender_contingency$cross_table[2,2], digits = 0),
+           " (",
+           round(gender_contingency$proportions[2,2] * 100, digits = 1),
+           ")"),
+    round(gender_chisq$p.value, digits = 3)),
+  
+  "Age" = c(
+    paste0(age_descr$`post_policy = 0`[3],
+           " (",
+           age_descr$`post_policy = 0`[2],
+           "-",
+           age_descr$`post_policy = 0`[4],
+           ")"),
+    paste0(age_descr$`post_policy = 1`[3],
+           " (",
+           age_descr$`post_policy = 1`[2],
+           "-", 
+           age_descr$`post_policy = 1`[4],
+           ")"),
+    round(age_wilcoxon$p.value, digits = 3)),
+
+  "BMI" = c(
+    paste0(round(BMI_descr$`post_policy = 0`[3], digits = 1),
+           " (",
+           round(BMI_descr$`post_policy = 0`[2], digits = 1), 
+           "-", 
+           round(BMI_descr$`post_policy = 0`[4], digits = 1),
+           ")"),
+    paste0(round(BMI_descr$`post_policy = 1`[3], digits = 1),
+           " (",
+           round(BMI_descr$`post_policy = 1`[2], digits = 1),
+           "-", 
+           round(BMI_descr$`post_policy = 1`[4], digits = 1),
+           ")"),
+    round(BMI_wilcoxon$p.value, digits = 3)),
+  
+  "White" = c(
+    paste0(round(race_ethnicity_contingency$cross_table[1,5], digits = 0), 
+    " (", 
+    round(race_ethnicity_contingency$proportions[1,5] * 100, digits = 1),
+    ")"),
+    paste0(round(race_ethnicity_contingency$cross_table[2,5], digits = 0), 
+    " (", 
+    round(race_ethnicity_contingency$proportions[2,5] * 100, digits = 1),
+    ")"),
+    round(race_ethnicity_chisq$p.value, digits = 3)),
+  
+  "Black" = c(
+    paste0(round(race_ethnicity_contingency$cross_table[1,2], digits = 0), 
+    " (", 
+    round(race_ethnicity_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(race_ethnicity_contingency$cross_table[2,2], digits = 0), 
+    " (", 
+    round(race_ethnicity_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "Hispanic" = c(
+    paste0(round(race_ethnicity_contingency$cross_table[1,3], digits = 0), 
+    " (", 
+    round(race_ethnicity_contingency$proportions[1,3] * 100, digits = 1),
+    ")"),
+    paste0(round(race_ethnicity_contingency$cross_table[2,3], digits = 0), 
+    " (", 
+    round(race_ethnicity_contingency$proportions[2,3] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "Asian" = c(
+    paste0(round(race_ethnicity_contingency$cross_table[1,1], digits = 0), 
+    " (", 
+    round(race_ethnicity_contingency$proportions[1,1] * 100, digits = 1),
+    ")"),
+    paste0(round(race_ethnicity_contingency$cross_table[2,1], digits = 0), 
+    " (", 
+    round(race_ethnicity_contingency$proportions[2,1] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "Other" = c(
+    paste0(round(race_ethnicity_contingency$cross_table[1,4], digits = 0), 
+    " (", 
+    round(race_ethnicity_contingency$proportions[1,4] * 100, digits = 1),
+    ")"),
+    paste0(round(race_ethnicity_contingency$cross_table[2,4], digits = 0), 
+    " (", 
+    round(race_ethnicity_contingency$proportions[2,4] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "Diabetes" = c(
+    paste0(round(diabetes_contingency$cross_table[1,2], digits = 0), 
+    " (", 
+    round(diabetes_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(diabetes_contingency$cross_table[2,2], digits = 0), 
+    " (", 
+    round(diabetes_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    round(diabetes_chisq$p.value, digits = 3)),
+  
+  "Malignancy" = c(
+    paste0(round(malig_contingency$cross_table[1,2], digits = 0), 
+    " (", 
+    round(malig_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(malig_contingency$cross_table[2,2], digits = 0), 
+    " (", 
+    round(malig_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    round(malig_chisq$p.value, digits = 3)),
+  
+  "Cerebrovascular disease" = c(
+    paste0(round(cvd_contingency$cross_table[1,2], digits = 0), 
+    " (", 
+    round(cvd_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(cvd_contingency$cross_table[2,2], digits = 0), 
+    " (", 
+    round(cvd_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    round(cvd_chisq$p.value, digits = 3)),
+  
+  "Nonischemic dilated cardiomyopathy" = c(
+    paste0(round(hf_etiology_contingency$cross_table[1,5], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[1,5] * 100, digits = 1),
+    ")"),
+    paste0(round(hf_etiology_contingency$cross_table[2,5], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[2,5] * 100, digits = 1),
+    ")"),
+    round(hf_etiology_chisq$p.value, digits = 3)),
+  
+  "Ischemic cardiomyopathy" = c(
+    paste0(round(hf_etiology_contingency$cross_table[1,4], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[1,4] * 100, digits = 1),
+    ")"),
+    paste0(round(hf_etiology_contingency$cross_table[2,4], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[2,4] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "Congenital heart disease" = c(
+    paste0(round(hf_etiology_contingency$cross_table[1,1], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[1,1] * 100, digits = 1),
+    ")"),
+    paste0(round(hf_etiology_contingency$cross_table[2,1], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[2,1] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "Restrictive cardiomyopathy" = c(
+    paste0(round(hf_etiology_contingency$cross_table[1,7], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[1,7] * 100, digits = 1),
+    ")"),
+    paste0(round(hf_etiology_contingency$cross_table[2,7], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[2,7] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "Valvular heart disease" = c(
+    paste0(round(hf_etiology_contingency$cross_table[1,8], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[1,8] * 100, digits = 1),
+    ")"),
+    paste0(round(hf_etiology_contingency$cross_table[2,8], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[2,8] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "Hypertrophic cardiomyopathy" = c(
+    paste0(round(hf_etiology_contingency$cross_table[1,3], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[1,3] * 100, digits = 1),
+    ")"),
+    paste0(round(hf_etiology_contingency$cross_table[2,3], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[2,3] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "Failure of primary transplant" = c(
+    paste0(round(hf_etiology_contingency$cross_table[1,2], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(hf_etiology_contingency$cross_table[2,2], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "Other etiology" = c(
+    paste0(round(hf_etiology_contingency$cross_table[1,6], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[1,6] * 100, digits = 1),
+    ")"),
+    paste0(round(hf_etiology_contingency$cross_table[2,6], digits = 0), 
+    " (", 
+    round(hf_etiology_contingency$proportions[2,6] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "Total bilirubin (mg/dL)" = c(
+    paste0(round(bilirubin_descr$`post_policy = 0`[3], digits = 2),
+           " (",
+           round(bilirubin_descr$`post_policy = 0`[2], digits = 2), 
+           "-", 
+           round(bilirubin_descr$`post_policy = 0`[4], digits = 2),
+           ")"),
+    paste0(round(bilirubin_descr$`post_policy = 1`[3], digits = 2),
+           " (",
+           round(bilirubin_descr$`post_policy = 1`[2], digits = 2),
+           "-", 
+           round(bilirubin_descr$`post_policy = 1`[4], digits = 2),
+           ")"),
+    round(bilirubin_wilcoxon$p.value, digits = 3)),
+  
+  "Serum creatinine (mg/dL)" = c(
+    paste0(round(creatinine_descr$`post_policy = 0`[3], digits = 2),
+           " (",
+           round(creatinine_descr$`post_policy = 0`[2], digits = 2), 
+           "-", 
+           round(creatinine_descr$`post_policy = 0`[4], digits = 2),
+           ")"),
+    paste0(round(creatinine_descr$`post_policy = 1`[3], digits = 2),
+           " (",
+           round(creatinine_descr$`post_policy = 1`[2], digits = 2),
+           "-", 
+           round(creatinine_descr$`post_policy = 1`[4], digits = 2),
+           ")"),
+    round(creatinine_wilcoxon$p.value, digits = 3)),
+  
+  "In ICU" = c(
+    paste0(round(hosp_contingency$cross_table[1,2], digits = 0), 
+    " (", 
+    round(hosp_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(hosp_contingency$cross_table[2,2], digits = 0), 
+    " (", 
+    round(hosp_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    round(hosp_chisq$p.value, digits = 3)),
+  
+  "Hospitalized, not in ICU" = c(
+    paste0(round(hosp_contingency$cross_table[1,1], digits = 0), 
+    " (", 
+    round(hosp_contingency$proportions[1,1] * 100, digits = 1),
+    ")"),
+    paste0(round(hosp_contingency$cross_table[2,1], digits = 0), 
+    " (", 
+    round(hosp_contingency$proportions[2,1] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "Not hospitalized" = c(
+    paste0(round(hosp_contingency$cross_table[1,3], digits = 0), 
+    " (", 
+    round(hosp_contingency$proportions[1,3] * 100, digits = 1),
+    ")"),
+    paste0(round(hosp_contingency$cross_table[2,3], digits = 0), 
+    " (", 
+    round(hosp_contingency$proportions[2,3] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "A" = c(
+    paste0(round(abo_contingency$cross_table[1,1], digits = 0),
+    " (",
+    round(abo_contingency$proportions[1,1] * 100, digits = 1),
+    ")"),
+    paste0(round(abo_contingency$cross_table[2,1], digits = 0),
+    " (",
+    round(abo_contingency$proportions[2,1] * 100, digits = 1),
+    ")"),
+    round(abo_chisq$p.value, digits = 3)),
+  
+  "B" = c(
+    paste0(round(abo_contingency$cross_table[1,5], digits = 0),
+    " (",
+    round(abo_contingency$proportions[1,5] * 100, digits = 1),
+    ")"),
+    paste0(round(abo_contingency$cross_table[2,5], digits = 0),
+    " (",
+    round(abo_contingency$proportions[2,5] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "AB" = c(
+    paste0(round(abo_contingency$cross_table[1,4], digits = 0),
+    " (",
+    round(abo_contingency$proportions[1,4] * 100, digits = 1),
+    ")"),
+    paste0(round(abo_contingency$cross_table[2,4], digits = 0),
+    " (",
+    round(abo_contingency$proportions[2,4] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "O" = c(
+    paste0(round(abo_contingency$cross_table[1,6], digits = 0),
+    " (",
+    round(abo_contingency$proportions[1,6] * 100, digits = 1),
+    ")"),
+    paste0(round(abo_contingency$cross_table[2,6], digits = 0),
+    " (",
+    round(abo_contingency$proportions[2,6] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "IV antibiotics in 2 weeks before transplant" = c(
+    paste0(round(iv_abx_contingency$cross_table[1,2], digits = 0), 
+    " (", 
+    round(iv_abx_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(iv_abx_contingency$cross_table[2,2], digits = 0), 
+    " (", 
+    round(iv_abx_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    round(iv_abx_chisq$p.value, digits = 3)),
+  
+  "High dose IV inotropes" = c(
+    paste0(round(high_dose_inotropes_contingency$cross_table[1,2], digits = 0), 
+    " (", 
+    round(high_dose_inotropes_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(high_dose_inotropes_contingency$cross_table[2,2], digits = 0), 
+    " (", 
+    round(high_dose_inotropes_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    round(high_dose_inotropes_chisq$p.value, digits = 3)),
+  
+  "Low dose IV inotropes" = c(
+    paste0(round(low_dose_inotropes_contingency$cross_table[1,2], digits = 0), 
+    " (", 
+    round(low_dose_inotropes_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(low_dose_inotropes_contingency$cross_table[2,2], digits = 0), 
+    " (", 
+    round(low_dose_inotropes_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    round(low_dose_inotropes_chisq$p.value, digits = 3)),  
+  
+  "Ventilator support" = c(
+    paste0(round(vent_contingency$cross_table[1,2], digits = 0), 
+    " (", 
+    round(vent_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(vent_contingency$cross_table[2,2], digits = 0), 
+    " (", 
+    round(vent_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    round(vent_chisq$p.value, digits = 3)),
+  
+  "IABP" = c(
+    paste0(round(iabp_contingency$cross_table[1,2], digits = 0), 
+    " (", 
+    round(iabp_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(iabp_contingency$cross_table[2,2], digits = 0), 
+    " (", 
+    round(iabp_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    round(iabp_chisq$p.value, digits = 3)),
+  
+  "ECMO" = c(
+    paste0(round(ecmo_contingency$cross_table[1,2], digits = 0), 
+    " (", 
+    round(ecmo_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(ecmo_contingency$cross_table[2,2], digits = 0), 
+    " (", 
+    round(ecmo_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    round(ecmo_chisq$p.value, digits = 3)),
+  
+  "Durable LVAD" = c(
+    paste0(round(durable_lvad_contingency$cross_table[1,2], digits = 0),
+    " (",
+    round(durable_lvad_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(durable_lvad_contingency$cross_table[2,2], digits = 0),
+    " (",
+    round(durable_lvad_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    round(durable_lvad_chisq$p.value, digits = 3)),
+  
+  "Other MCS" = c(
+    paste0(round(other_MCS_contingency$cross_table[1,2], digits = 0),
+    " (",
+    round(other_MCS_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(other_MCS_contingency$cross_table[2,2], digits = 0),
+    " (",
+    round(other_MCS_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    round(other_MCS_chisq$p.value, digits = 3)),
+  
+  "No MCS" = c(
+    paste0(round(no_MCS_contingency$cross_table[1,2], digits = 0),
+    " (",
+    round(no_MCS_contingency$proportions[1,2] * 100, digits = 1),
+    ")"),
+    paste0(round(no_MCS_contingency$cross_table[2,2], digits = 0),
+    " (",
+    round(no_MCS_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    round(no_MCS_chisq$p.value, digits = 3)),    
+  
+  "Days on wait list" = c(
+    paste0(round(waitlist_time_descr$`post_policy = 0`[3], digits = 0),
+           " (",
+           round(waitlist_time_descr$`post_policy = 0`[2], digits = 0), 
+           "-", 
+           round(waitlist_time_descr$`post_policy = 0`[4], digits = 0),
+           ")"),
+    paste0(round(waitlist_time_descr$`post_policy = 1`[3], digits = 0),
+           " (",
+           round(waitlist_time_descr$`post_policy = 1`[2], digits = 0),
+           "-", 
+           round(waitlist_time_descr$`post_policy = 1`[4], digits = 0),
+           ")"),
+    round(waitlist_time_wilcoxon$p.value, digits = 3)),
+  
+  "Old Status 1A" = c(
+    paste0(round(list_status_contingency$cross_table[1,6], digits = 0),
+    " (",
+    round(list_status_contingency$proportions[1,6] * 100, digits = 1),
+    ")"),
+    paste0("\u2013"),
+    paste0("\u2013")),
+  
+  "Old Status 1B" = c(
+    paste0(round(list_status_contingency$cross_table[1,7], digits = 0),
+    " (",
+    round(list_status_contingency$proportions[1,7] * 100, digits = 1),
+    ")"),
+    paste0("\u2013"),
+    " "),  
+
+  "Old Status 2" = c(
+    paste0(round(list_status_contingency$cross_table[1,8], digits = 0),
+    " (",
+    round(list_status_contingency$proportions[1,8] * 100, digits = 1),
+    ")"),
+    paste0("\u2013"),
+    " "),
+  
+  "New Status 1" = c(
+    paste0("\u2013"),
+    paste0(round(list_status_contingency$cross_table[2,1], digits = 0),
+    " (",
+    round(list_status_contingency$proportions[2,1] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "New Status 2" = c(
+    paste0("\u2013"),
+    paste0(round(list_status_contingency$cross_table[2,2], digits = 0),
+    " (",
+    round(list_status_contingency$proportions[2,2] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "New Status 3" = c(
+    paste0("\u2013"),
+    paste0(round(list_status_contingency$cross_table[2,3], digits = 0),
+    " (",
+    round(list_status_contingency$proportions[2,3] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "New Status 4" = c(
+    paste0("\u2013"),
+    paste0(round(list_status_contingency$cross_table[2,4], digits = 0),
+    " (",
+    round(list_status_contingency$proportions[2,4] * 100, digits = 1),
+    ")"),
+    " "),
+  
+  "New Status 6" = c(
+    paste0("\u2013"),
+    paste0(round(list_status_contingency$cross_table[2,5], digits = 0),
+    " (",
+    round(list_status_contingency$proportions[2,5] * 100, digits = 1),
+    ")"),
+    " "))
+
+pre_policy_header <-  paste0("Pre-policy (n = ", num_tx_per_cohort[2,2], ")")
+post_policy_header <-  paste0("Post-policy (n = ", num_tx_per_cohort[1,2], ")")
+
+header_df <- data.frame(c(" ", pre_policy_header, post_policy_header, "p-value"),
+                        c(1, 1, 1, 1))
+
+(table_1 <- tx_rec_characteristics %>% 
+  t() %>%
+  kbl(
+    caption = "Table 1. Recipient Characteristics at the Time of Transplant",
+    align = "c",
+    booktabs = TRUE) %>%
+  add_header_above(header_df) %>%
+  add_footnote(c("Values are n (%) or median (IQR)",
+                 "BMI = body mass index; ECMO = extracorporeal membrane oxygenation; IABP = intra-aortic balloon pump; ICU = intensive care unit; IV = intravenous; LVAD = left ventricular assist device; MCS = mechanical circulatory support"),
+               notation = "symbol") %>%
+    pack_rows(group_label = "Race/Ethnicity",
+              start_row = 4,
+              end_row = 8) %>%
+    pack_rows(group_label = "Recipient history",
+              start_row = 9,
+              end_row = 11) %>%
+    pack_rows(group_label = "Heart failure etiology",
+              start_row = 12,
+              end_row = 19) %>%
+    pack_rows(group_label = "Pretransplant hospitalization status",
+              start_row = 22,
+              end_row = 24) %>%
+    pack_rows(group_label = "Blood type",
+              start_row = 25,
+              end_row = 28) %>%
+    pack_rows(group_label = "Pretransplant medical therapy",
+              start_row = 29,
+              end_row = 37) %>%
+    pack_rows(group_label = "Wait-list status at transplant",
+              start_row = 39,
+              end_row = 46) %>% 
+  kable_styling()) #%>% 
+  # as_image())
+```

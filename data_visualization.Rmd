@@ -1,0 +1,58 @@
+---
+title: "data_visualization"
+author: "Kevin Lazenby"
+date: "7/2/2021"
+output: html_document
+---
+
+# Setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(knitr)
+library(tidyverse)
+library(haven)
+library(rmdformats)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(survival)
+library(survminer)
+library(vistime)
+library(stargazer)
+library(kableExtra)
+library(summarytools)
+library(here)
+library(ggsci)
+```
+
+# 1. Calculating censoring and death counts and percentages in each cohort
+
+```{r}
+
+pct_censored_cohort_1 <- calculate_censoring_percentages(
+  input_cohort_list = tx_list_cohort_1)
+
+# Censoring counts and percentages
+pct_censored_cohort_1[,1:5] %>% kbl() %>% kable_styling()
+
+# Death counts and percentages
+pct_censored_cohort_1[,c(1, 6:9)] %>% kbl() %>% kable_styling()
+
+```
+
+# 2. Creating violin plot to show survival time by follow-up method in post-policy cohort
+
+```{r}
+
+violin_plot_1_post <- create_violin_plot(
+  adequate_follow_up_list = tx_list_cohort_1,
+  truncated_follow_up_list = tx_list_truncated_cohort_1,
+  truncated_follow_up_list_2 = tx_list_truncated_cohort_2,
+  truncated_follow_up_list_3 = tx_list_truncated_cohort_3,
+  post_policy_cohort = TRUE)
+
+violin_plot_1_post
+
+```

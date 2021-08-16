@@ -1,0 +1,268 @@
+---
+title: "truncated_follow_up_demonstration"
+author: "Kevin Lazenby"
+date: "7/27/2021"
+output:
+  html_document:
+    theme: cosmo
+    toc: yes
+  rmdformats::material:
+    highlight: tango
+---
+
+This is a script to demonstrate the effect of truncated follow-up on survival modeling.
+The "function_definitions.Rmd" script must be run prior to running this one.
+
+# Setup
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(comment = NA, prompt = FALSE, cache = FALSE, echo = TRUE,
+                      results = "asis")
+
+library(knitr)
+library(tidyverse)
+library(haven)
+library(rmdformats)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(survival)
+library(survminer)
+library(vistime)
+library(stargazer)
+library(kableExtra)
+library(summarytools)
+library(here)
+
+here::i_am("truncated_follow_up_demonstration.Rmd")
+```
+
+# 1. Importing data (TXF_HR)
+
+In data_wrangling.Rmd, the following operations have already been performed:
+- TX_HR was imported
+- Study population was defined
+- Death records were supplemented
+- Cohorts were stratified
+
+```{r import data}
+
+txf_list <- import_txf_data(sub_folder = "pubsaf2103", 
+                            file_name = "txf_hr.sas7bdat")
+
+```
+
+# 2. Truncation of follow-up (Post-policy cohort with truncated follow-up #1)
+  
+```{r truncated cohort 1}
+
+tx_list_truncated_cohort_1 <- truncate_follow_up(
+  input_cohort_list = tx_list_cohort_1,
+  input_follow_up_list = txf_list,
+  analysis_date = as.Date("2019-11-01"))
+
+(num_tx_per_cohort_truncated_1 <- tx_list_truncated_cohort_1 %>% 
+  select(PX_ID, policy) %>% 
+  group_by(policy) %>% 
+  count())
+```
+
+# 3. Truncation of follow-up (Post-policy cohort with truncated follow-up #2)
+  
+```{r truncated cohort 2}
+
+tx_list_truncated_cohort_2 <- truncate_follow_up(
+  input_cohort_list = tx_list_cohort_1,
+  input_follow_up_list = txf_list,
+  analysis_date = as.Date("2020-05-01"))
+
+(num_tx_per_cohort_truncated_2 <- tx_list_truncated_cohort_2 %>% 
+  select(PX_ID, policy) %>% 
+  group_by(policy) %>% 
+  count())
+```
+
+# 4. Truncation of follow-up (Post-policy cohort with truncated follow-up #3)
+  
+```{r truncated cohort 3}
+
+tx_list_truncated_cohort_3 <- truncate_follow_up(
+  input_cohort_list = tx_list_cohort_1,
+  input_follow_up_list = txf_list,
+  analysis_date = as.Date("2020-11-01"))
+
+(num_tx_per_cohort_truncated_3 <- tx_list_truncated_cohort_3 %>% 
+  select(PX_ID, policy) %>% 
+  group_by(policy) %>% 
+  count())
+```
+
+# 5. Truncation of follow-up (Post-policy cohort with truncated follow-up #4)
+  
+```{r truncated cohort 4}
+
+tx_list_truncated_cohort_4 <- truncate_follow_up(
+  input_cohort_list = tx_list_cohort_1,
+  input_follow_up_list = txf_list,
+  analysis_date = as.Date("2021-03-02"))
+
+(num_tx_per_cohort_truncated_4 <- tx_list_truncated_cohort_4 %>% 
+  select(PX_ID, policy) %>% 
+  group_by(policy) %>% 
+  count())
+```
+
+# 6. Kaplan-Meier survival model with truncated follow-up #1
+
+```{r k-m model truncated follow-up 1}
+
+post_tx_survival_truncated_cohort_1 <- construct_km_model(
+  input_cohort_list = tx_list_truncated_cohort_1,
+  y_limits = c(0.7, 1),
+  legend_position = c(0.1, 0.2),
+  plot_title = NULL)
+
+post_tx_survival_truncated_cohort_1[[2]]
+
+post_tx_survival_truncated_cohort_1[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_truncated_cohort_1[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+```
+
+# 7. Kaplan-Meier survival model with truncated follow-up #2
+
+```{r k-m model truncated follow-up 2}
+
+post_tx_survival_truncated_cohort_2 <- construct_km_model(
+  input_cohort_list = tx_list_truncated_cohort_2,
+  y_limits = c(0.85, 1),
+  legend_position = c(0.9, 0.8),  
+  plot_title = NULL)
+
+post_tx_survival_truncated_cohort_2[[2]]
+
+post_tx_survival_truncated_cohort_2[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_truncated_cohort_2[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+```
+
+# 8. Kaplan-Meier survival model with truncated follow-up #3
+
+```{r k-m model truncated follow-up 3}
+
+post_tx_survival_truncated_cohort_3 <- construct_km_model(
+  input_cohort_list = tx_list_truncated_cohort_3,
+  y_limits = c(0.85, 1),
+  legend_position = c(0.1, 0.2),
+  plot_title = NULL)
+
+post_tx_survival_truncated_cohort_3[[2]]
+
+post_tx_survival_truncated_cohort_3[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_truncated_cohort_3[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+```
+
+# 9. Kaplan-Meier survival model with truncated follow-up #4
+
+```{r k-m model truncated follow-up 4}
+
+post_tx_survival_truncated_cohort_4 <- construct_km_model(
+  input_cohort_list = tx_list_truncated_cohort_4,
+  y_limits = c(0.85, 1),
+  legend_position = c(0.1, 0.2),
+  plot_title = NULL)
+
+post_tx_survival_truncated_cohort_4[[2]]
+
+post_tx_survival_truncated_cohort_4[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_truncated_cohort_4[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+```
+
+# 10. Assembling eFigure 1
+
+```{r}
+plot_e1A <- post_tx_survival_truncated_cohort_1[[2]]$plot + 
+  rremove("x.title") +
+  rremove("y.title") +  
+  rremove("legend") +
+  rremove("x.grid")
+
+table_e1A <- post_tx_survival_truncated_cohort_1[[2]]$table +
+  rremove("x.title") +
+  rremove("y.title") +
+  rremove("x.grid") +
+  rremove("y.grid")
+  
+plot_e1B <- post_tx_survival_truncated_cohort_2[[2]]$plot +
+  rremove("x.title") +
+  rremove("y.title") +  
+  rremove("legend") +
+  rremove("x.grid")
+
+table_e1B <- post_tx_survival_truncated_cohort_2[[2]]$table +
+  rremove("x.title") +
+  rremove("y.title") +
+  rremove("x.grid") +
+  rremove("y.grid")  
+
+plot_e1C <- post_tx_survival_truncated_cohort_3[[2]]$plot +
+  rremove("x.title") +
+  rremove("y.title") + 
+  rremove("legend") +
+  rremove("x.grid")
+
+table_e1C <- post_tx_survival_truncated_cohort_3[[2]]$table +
+  rremove("x.title") +
+  rremove("y.title") +
+  rremove("x.grid") +
+  rremove("y.grid") 
+
+plot_e1D <- post_tx_survival_truncated_cohort_4[[2]]$plot +
+  rremove("x.title") +
+  rremove("y.title") +
+  rremove("legend") +
+  rremove("x.grid")
+
+table_e1D <- post_tx_survival_truncated_cohort_4[[2]]$table +
+  rremove("x.title") +  
+  rremove("y.title") +
+  rremove("x.grid") +
+  rremove("y.grid") 
+
+e_figure_1 <- ggarrange(plot_e1A, plot_e1B, table_e1A, table_e1B,
+          plot_e1C, plot_e1D, table_e1C, table_e1D,
+          ncol = 2, nrow = 4, common.legend = TRUE,
+          labels = list("A", "B", "", "", "C", "D", "", ""),
+          label.x = c(0.05, 0.06, 0, 0, 0.05, 0.06, 0, 0),
+          label.y = c(0.275, 0.275, 0, 0, 0.275, 0.275, 0, 0),
+          heights = c(0.375, 0.125, 0.375, 0.125, 0.375, 0.125, 0.375, 0.125),
+          font.label = list(size = 24, face = "bold")) %>%
+  annotate_figure(bottom = text_grob("Time (days)"),
+                  left = text_grob("Survival probability", rot = 90))
+
+e_figure_1
+
+```

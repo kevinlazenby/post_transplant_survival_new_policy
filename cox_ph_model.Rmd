@@ -1,0 +1,116 @@
+---
+title: "cox_ph_model"
+author: "Kevin Lazenby"
+date: "7/9/2021"
+output:
+  rmarkdown: html_vignette
+---
+
+# Setup
+
+```{r, setup, include=FALSE}
+
+knitr::opts_chunk$set(comment = NA, prompt = FALSE, cache = FALSE, echo = TRUE,
+                      results = "asis", warning = FALSE)
+
+library(knitr)
+library(tidyverse)
+library(haven)
+library(rmdformats)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(survival)
+library(survminer)
+library(vistime)
+library(stargazer)
+library(kableExtra)
+library(here)
+library(summarytools)
+library(ggsci)
+library(finalfit)
+library(magrittr)
+library(tab)
+
+st_options(style = "rmarkdown", plain.ascii = FALSE, footnote = NA)
+```
+
+# 1. Univariate exploratory Cox PH models
+
+```{r}
+
+univariate_cox_ph_models <- construct_univariate_cox_ph_models(
+  input_cohort_list = tx_list_cohort_1)
+
+univariate_cox_ph_models
+
+```
+
+# 2. Full Multivariate Cox PH Model (no interaction effects)
+
+Model equation: $$h(t) = h_0(t) \times \exp(x_1\beta_{policy} + x_2\beta_{recipient \space age \space over \space 60} + x_3\beta_{total \space bilirubin \space \geq \space 4} + x_4\beta_{creatinine \space clearance \space < \space 30} + x_5\beta_{dialysis \space after \space listing} +\\ x_6\beta_{female \space sex} + x_7\beta_{ischemic \space cardiomyopathy} + x_8\beta_{congenital \space heart \space disease} +x_9\beta_{other \space HF \space etiology} + x_{10}\beta_{recent \space infection} +\\ x_{11}\beta_{IABP} + x_{12}\beta_{mechanical \space ventilation} + x_{13}\beta_{Black \space race} + x_{14}\beta_{temporary \space circulatory \space support} + x_{15}\beta_{durable \space LVAD})$$
+
+```{r}
+
+cox_ph_cohort_list <- tx_list_cohort_1
+
+cox_ph_cohort_list <- cox_ph_cohort_list %>% 
+  mutate(age_over_60 = case_when(
+    rec_age > 60 ~ 1,
+    TRUE ~ 0),
+    
+    bili_over_4 = case_when(
+      REC_TOT_BILI >= 4 ~ 1,
+      TRUE ~ 0),
+    
+    creat_clear_under_30 = case_when(
+      creatinine_clearance < 30 ~ 1,
+      TRUE ~ 0),
+    
+    female_sex = case_when(
+      male_gender == 0 ~ 1,
+      TRUE ~ 0),
+    
+    temporary_CS = case_when(
+      ECMO == 1 | temporary_LVAD == 1 ~ 1,
+      TRUE ~ 0))
+
+cox_ph_model <- coxph(Surv(surv_time_365, status_365) ~ 
+                               post_policy +
+                               age_over_60 +
+                               bili_over_4 +
+                               creat_clear_under_30 +
+                               REC_DIAL +
+                               female_sex +
+                               ischemic_CM +
+                               congenital_heart_disease +
+                               other_etiology_IMPACT +
+                               iv_abx +
+                               IABP +
+                               ventilator +
+                               BLACK +
+                               temporary_CS +
+                               durable_LVAD,
+                             data = cox_ph_cohort_list)
+   
+cox_ph_table <- cox_ph_model %>% tabcoxph(
+  columns = c('beta.se', 'hr.ci', 'z', 'p'),
+  var.labels = list(post_policy = "Transplant after policy change",
+                    age_over_60 = "Age over 60",
+                    bili_over_4 = "Total bilirubin greater than 4 mg/dl",
+                    creat_clear_under_30 = "Creatinine clearance less than 30 ml/min",
+                    REC_DIAL = "Dialysis between listing and transplant",
+                    female_sex = "Female sex",
+                    ischemic_CM = "Heart failure etiology: Ischemic",
+                    congenital_heart_disease = "Heart failure etiology: Congenital",
+                    other_etiology_IMPACT = "Heart failure etiology: Other",
+                    iv_abx = "Recent infection",
+                    IABP = "Intra-aortic balloon pump",
+                    ventilator = "Pre-transplant mechanical ventilation",
+                    BLACK = "Black race",
+                    temporary_CS = "Temporary circulatory support",
+                    durable_LVAD = "Durable left ventricular assist device"))
+
+cox_ph_model_summary <- cox_ph_model %>% summary()
+
+```

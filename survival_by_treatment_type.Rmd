@@ -1,0 +1,340 @@
+---
+title: "survival_by_treatment_type"
+author: "Kevin Lazenby"
+date: "7/20/2021"
+output:
+  html_document:
+    theme: cosmo
+    toc: yes
+  rmdformats::material:
+    highlight: tango
+---
+
+# Setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(knitr)
+library(tidyverse)
+library(haven)
+library(rmdformats)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(survival)
+library(survminer)
+library(vistime)
+library(stargazer)
+library(kableExtra)
+library(summarytools)
+library(here)
+```
+
+# 1. Kaplan-Meier Survival Model, restricted to recipients with IABP
+
+```{r}
+
+post_tx_survival_iabp <- construct_km_model(
+  input_cohort_list = tx_list_cohort_4 %>%
+    filter(IABP == 1),
+  y_limits = c(0.85, 1),
+  legend_position = c(0.1, 0.2),  
+  plot_title = NULL)
+
+post_tx_survival_iabp[[2]]
+
+post_tx_survival_iabp[[4]] %>% 
+  filter(time >= 363 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_iabp[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+```
+
+# 2. Kaplan-Meier Survival Model, restricted to recipients on ECMO
+
+```{r}
+
+post_tx_survival_ecmo <- construct_km_model(
+  input_cohort_list = tx_list_cohort_4 %>%
+    filter(ECMO == 1),
+  y_limits = c(0.5, 1),
+  legend_position = c(0.1, 0.2),  
+  plot_title = NULL)
+
+post_tx_survival_ecmo[[2]]
+
+post_tx_survival_ecmo[[4]] %>% 
+  filter(time >= 265 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_ecmo[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+```
+
+# 3. Kaplan-Meier Survival Model, restricted to recipients on low dose inotropes
+
+```{r}
+
+post_tx_survival_low_dose_inotropes <- construct_km_model(
+  input_cohort_list = tx_list_cohort_4 %>%
+    filter(low_dose_inotropes == 1),
+  y_limits = c(0.85, 1),
+  legend_position = c(0.1, 0.2),  
+  plot_title = NULL)
+
+post_tx_survival_low_dose_inotropes[[2]]
+
+post_tx_survival_low_dose_inotropes[[4]] %>% 
+  filter(time >= 363 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_low_dose_inotropes[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+```
+# 4. Kaplan-Meier Survival Model, restricted to recipients on high dose inotropes
+
+```{r}
+
+post_tx_survival_high_dose_inotropes <- construct_km_model(
+  input_cohort_list = tx_list_cohort_4 %>%
+    filter(high_dose_inotropes == 1),
+  y_limits = c(0.85, 1),
+  legend_position = c(0.1, 0.2),  
+  plot_title = NULL)
+
+post_tx_survival_high_dose_inotropes[[2]]
+
+post_tx_survival_high_dose_inotropes[[4]] %>% 
+  filter(time >= 363 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_high_dose_inotropes[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+```
+
+
+# 5. Kaplan-Meier Survival Model, restricted to recipients on pretransplant mechanical ventilatory support
+
+```{r}
+
+post_tx_survival_ventilator <- construct_km_model(
+  input_cohort_list = tx_list_cohort_4 %>%
+    filter(ventilator == 1),
+  y_limits = c(0.5, 1),
+  legend_position = c(0.1, 0.2),  
+  plot_title = NULL)
+
+post_tx_survival_ventilator[[2]]
+
+post_tx_survival_ventilator[[4]] %>% 
+  filter(time >= 150 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_ventilator[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+```
+
+# 6. Kaplan-Meier Survival Model, restricted to recipients with durable LVAD
+
+```{r}
+
+post_tx_survival_durable_lvad <- construct_km_model(
+  input_cohort_list = tx_list_cohort_4 %>%
+    filter(durable_LVAD == 1),
+  y_limits = c(0.85, 1),
+  legend_position = c(0.1, 0.2),  
+  plot_title = NULL)
+
+post_tx_survival_durable_lvad[[2]]
+
+post_tx_survival_durable_lvad[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_durable_lvad[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+```
+
+# 7. Kaplan-Meier Survival Model, restricted to recipients on other MCS
+
+```{r}
+
+post_tx_survival_other_MCS <- construct_km_model(
+  input_cohort_list = tx_list_cohort_4 %>%
+    filter(other_MCS == 1),
+  y_limits = c(0.75, 1),
+  legend_position = c(0.1, 0.2),  
+  plot_title = NULL)
+
+post_tx_survival_other_MCS[[2]]
+
+post_tx_survival_other_MCS[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_other_MCS[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+```
+
+# 8. Kaplan-Meier Survival Model, restricted to recipients on no MCS
+
+```{r}
+
+post_tx_survival_no_MCS <- construct_km_model(
+  input_cohort_list = tx_list_cohort_4 %>%
+    filter(no_MCS == 1),
+  y_limits = c(0.85, 1),
+  legend_position = c(0.1, 0.2),  
+  plot_title = NULL)
+
+post_tx_survival_no_MCS[[2]]
+
+post_tx_survival_no_MCS[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_no_MCS[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+```
+
+# 9. Assembling Figure 2
+
+```{r}
+plot_1A <- post_tx_survival_ecmo[[2]]$plot + 
+  rremove("x.title") +
+  rremove("y.title") +  
+  rremove("legend") +
+  rremove("x.grid")
+
+table_1A <- post_tx_survival_ecmo[[2]]$table +
+  rremove("x.title") +
+  rremove("y.title") +
+  rremove("x.grid") +
+  rremove("y.grid")
+  
+plot_1B <- post_tx_survival_iabp[[2]]$plot +
+  rremove("x.title") +
+  rremove("y.title") +  
+  rremove("legend") +
+  rremove("x.grid")
+
+table_1B <- post_tx_survival_iabp[[2]]$table +
+  rremove("x.title") +
+  rremove("y.title") +
+  rremove("x.grid") +
+  rremove("y.grid")  
+
+plot_1C <- post_tx_survival_ventilator[[2]]$plot +
+  rremove("x.title") +
+  rremove("y.title") + 
+  rremove("legend") +
+  rremove("x.grid")
+
+table_1C <- post_tx_survival_ventilator[[2]]$table +
+  rremove("x.title") +
+  rremove("y.title") +
+  rremove("x.grid") +
+  rremove("y.grid") 
+
+plot_1D <- post_tx_survival_durable_lvad[[2]]$plot +
+  rremove("x.title") +
+  rremove("y.title") +
+  rremove("legend") +
+  rremove("x.grid")
+
+table_1D <- post_tx_survival_durable_lvad[[2]]$table +
+  rremove("x.title") +  
+  rremove("y.title") +
+  rremove("x.grid") +
+  rremove("y.grid") 
+
+figure_2 <- ggarrange(plot_1A, plot_1B, table_1A, table_1B,
+          plot_1C, plot_1D, table_1C, table_1D,
+          ncol = 2, nrow = 4, common.legend = TRUE,
+          labels = list("A", "B", "", "", "C", "D", "", ""),
+          label.x = c(0.05, 0.06, 0, 0, 0.05, 0.06, 0, 0),
+          label.y = c(0.275, 0.275, 0, 0, 0.275, 0.275, 0, 0),
+          heights = c(0.375, 0.125, 0.375, 0.125, 0.375, 0.125, 0.375, 0.125),
+          font.label = list(size = 24, face = "bold")) %>%
+  annotate_figure(bottom = text_grob("Time (days)"),
+                  left = text_grob("Survival probability", rot = 90))
+
+figure_2
+
+```
+
+# 10. Assembling eFigure 4
+
+```{r}
+plot_2A <- post_tx_survival_low_dose_inotropes[[2]]$plot + 
+  rremove("x.title") +
+  rremove("y.title") +  
+  rremove("legend") +
+  rremove("x.grid")
+
+table_2A <- post_tx_survival_low_dose_inotropes[[2]]$table +
+  rremove("x.title") +
+  rremove("y.title") +
+  rremove("x.grid") +
+  rremove("y.grid")
+  
+plot_2B <- post_tx_survival_high_dose_inotropes[[2]]$plot +
+  rremove("x.title") +
+  rremove("y.title") +  
+  rremove("legend") +
+  rremove("x.grid")
+
+table_2B <- post_tx_survival_high_dose_inotropes[[2]]$table +
+  rremove("x.title") +
+  rremove("y.title") +
+  rremove("x.grid") +
+  rremove("y.grid")  
+
+plot_2C <- post_tx_survival_other_MCS[[2]]$plot +
+  rremove("x.title") +
+  rremove("y.title") + 
+  rremove("legend") +
+  rremove("x.grid")
+
+table_2C <- post_tx_survival_other_MCS[[2]]$table +
+  rremove("x.title") +
+  rremove("y.title") +
+  rremove("x.grid") +
+  rremove("y.grid") 
+
+plot_2D <- post_tx_survival_no_MCS[[2]]$plot +
+  rremove("x.title") +
+  rremove("y.title") +
+  rremove("legend") +
+  rremove("x.grid")
+
+table_2D <- post_tx_survival_no_MCS[[2]]$table +
+  rremove("x.title") +  
+  rremove("y.title") +
+  rremove("x.grid") +
+  rremove("y.grid") 
+
+e_figure <- ggarrange(plot_2A, plot_2B, table_2A, table_2B,
+          plot_2C, plot_2D, table_2C, table_2D,
+          ncol = 2, nrow = 4, common.legend = TRUE,
+          labels = list("A", "B", "", "", "C", "D", "", ""),
+          label.x = c(0.06, 0.06, 0, 0, 0.06, 0.06, 0, 0),
+          label.y = c(0.275, 0.275, 0, 0, 0.275, 0.275, 0, 0),
+          heights = c(0.375, 0.125, 0.375, 0.125, 0.375, 0.125, 0.375, 0.125),
+          font.label = list(size = 24, face = "bold")) %>%
+  annotate_figure(bottom = text_grob("Time (days)"),
+                  left = text_grob("Survival probability", rot = 90))
+
+e_figure
+
+```

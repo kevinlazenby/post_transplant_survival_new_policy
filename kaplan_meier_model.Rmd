@@ -1,0 +1,152 @@
+---
+title: "kaplan_meier_model"
+author: "Kevin Lazenby"
+date: "7/21/2021"
+output:
+  html_document:
+    theme: cosmo
+    toc: yes
+  rmdformats::material:
+    highlight: tango
+---
+
+This is a script to perform Kaplan-Meier survival modeling.
+The script "data_wrangling.Rmd" must be run prior to running this script.
+
+# Setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(knitr)
+library(tidyverse)
+library(haven)
+library(rmdformats)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(survival)
+library(survminer)
+library(vistime)
+library(stargazer)
+library(kableExtra)
+library(summarytools)
+library(here)
+```
+
+# 1. Kaplan-Meier survival model #1
+
+Pre-policy cohort #1:
+  - Start date: November 1, 2016
+  - End date: October 31, 2017
+
+Post-policy cohort:
+  - Start date: November 1, 2018
+  - End date: October 31, 2019
+
+```{r k-m model 1}
+
+post_tx_survival_cohort_1 <- construct_km_model(
+  input_cohort_list = tx_list_cohort_1,
+  y_limits = c(0.85, 1),
+  legend_position = c(0.8, 0.8),
+  plot_title = NULL)
+
+post_tx_survival_cohort_1[[2]]
+
+post_tx_survival_cohort_1[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_cohort_1[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+```
+
+# 2. Kaplan-Meier survival model #2
+
+Pre-policy cohort #2:
+  - Start date: November 1, 2017
+  - End date: October 17, 2018
+
+Post-policy cohort:
+  - Start date: November 1, 2018
+  - End date: October 31, 2019
+
+```{r k-m model 2}
+
+post_tx_survival_cohort_2 <- construct_km_model(
+  input_cohort_list = tx_list_cohort_2,
+  y_limits = c(0.85, 1),
+  legend_position = c(0.9, 0.8),
+  plot_title = "1-year K-M survival analysis (pre-policy cohort: 2017-2018)")
+
+post_tx_survival_cohort_2[[2]]
+
+post_tx_survival_cohort_2[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_cohort_2[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+```
+
+# 3. Kaplan-Meier survival model #3
+
+Pre-policy cohort #3:
+  - Start date: November 1, 2015
+  - End date: October 31, 2016
+
+Post-policy cohort:
+  - Start date: November 1, 2018
+  - End date: October 31, 2019
+
+```{r k-m model 3}
+
+post_tx_survival_cohort_3 <- construct_km_model(
+  input_cohort_list = tx_list_cohort_3,
+  y_limits = c(0.85, 1),
+  legend_position = c(0.9, 0.8),  
+  plot_title = "1-year K-M survival analysis (pre-policy cohort: 2015-2016)")
+
+post_tx_survival_cohort_3[[2]]
+
+post_tx_survival_cohort_3[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_cohort_3[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+```
+
+# 4. Kaplan-Meier survival model #4
+
+Pre-policy cohort #4:
+  - Start date: November 1, 2015
+  - End date: October 17, 2018
+
+Post-policy cohort:
+  - Start date: November 1, 2018
+  - End date: October 31, 2019
+
+```{r k-m model 4}
+
+post_tx_survival_cohort_4 <- construct_km_model(
+  input_cohort_list = tx_list_cohort_4,
+  y_limits = c(0.85, 1),
+  legend_position = c(0.9, 0.8),  
+  plot_title = "1-year K-M survival analysis (pre-policy cohort: 2015-2018)")
+
+post_tx_survival_cohort_4[[2]]
+
+post_tx_survival_cohort_4[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 0) %>% 
+  select(post_policy, time, lower, surv, upper)
+
+post_tx_survival_cohort_4[[4]] %>% 
+  filter(time >= 364 & time <= 365, post_policy == 1) %>% 
+  select(post_policy, time, lower, surv, upper)
+```

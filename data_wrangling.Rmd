@@ -1,0 +1,166 @@
+---
+title: "data_wrangling"
+author: "Kevin Lazenby"
+date: "7/20/2021"
+output:
+  html_document:
+    theme: cosmo
+    toc: yes
+  rmdformats::material:
+    highlight: tango
+---
+
+This is a script to perform data wrangling on the SRTR data set.
+The "function_definitions.Rmd" script must be run prior to running this one.
+
+# Setup
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(comment = NA, prompt = FALSE, cache = FALSE, echo = TRUE,
+                      results = "asis")
+
+library(knitr)
+library(tidyverse)
+library(haven)
+library(rmdformats)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(survival)
+library(survminer)
+library(vistime)
+library(stargazer)
+library(kableExtra)
+library(summarytools)
+library(here)
+
+here::i_am("data_wrangling.Rmd")
+```
+
+# 1. Importing data (TX_HR, STATJUST_HR1A, STATJUST_HR1B)
+
+```{r import data}
+
+tx_list <- import_tx_data(sub_folder = "pubsaf2103", 
+                          file_name = "tx_hr.sas7bdat")
+
+```
+
+# 2. Defining study population
+
+In this section, we select adult, heart-only transplant recipients.
+
+The following exclusion criteria were applied:
+1.  Age $\leq$ 17 years old at the time of listing
+2.  Recipient of multi-organ transplant
+
+```{r define study population}
+
+tx_list <- apply_exclusion_criteria(input_tx_list = tx_list)
+
+```
+
+# 3. Using SSA Death Master File data to supplement UNOS death records
+
+```{r amend death dates}
+
+tx_list <- supplement_death_records(input_tx_list = tx_list)
+
+```
+
+# 4. Cohort Stratification (Pre-policy cohort #1)
+
+Pre-policy cohort #1:
+  - Start date: November 1, 2016
+  - End date: October 31, 2017
+
+Post-policy cohort:
+  - Start date: November 1, 2018
+  - End date: October 31, 2019
+
+```{r cohort stratification 1}
+
+tx_list_cohort_1 <- do_data_wrangling(input_tx_list = tx_list, 
+                  pre_policy_start = as.Date("2016-11-01"),
+                  pre_policy_end = as.Date("2017-10-31"),
+                  post_policy_start = as.Date("2018-11-01"),
+                  post_policy_end = as.Date("2019-10-31"))
+
+(num_tx_per_cohort_1 <- tx_list_cohort_1 %>% 
+  select(PX_ID, policy) %>% 
+  group_by(policy) %>% 
+  count())
+```
+
+# 5. Cohort Stratification (Pre-policy cohort #2)
+
+Pre-policy cohort #2:
+  - Start date: November 1, 2017
+  - End date: October 17, 2018
+
+Post-policy cohort:
+  - Start date: November 1, 2018
+  - End date: October 31, 2019
+
+```{r cohort stratification 2}
+
+tx_list_cohort_2 <- do_data_wrangling(input_tx_list = tx_list, 
+                  pre_policy_start = as.Date("2017-11-01"),
+                  pre_policy_end = as.Date("2018-10-17"),
+                  post_policy_start = as.Date("2018-11-01"),
+                  post_policy_end = as.Date("2019-10-31"))
+
+(num_tx_per_cohort_2 <- tx_list_cohort_2 %>% 
+  select(PX_ID, policy) %>% 
+  group_by(policy) %>% 
+  count())
+```
+
+# 6. Cohort Stratification (Pre-policy cohort #3)
+
+Pre-policy cohort #3:
+  - Start date: November 1, 2015
+  - End date: October 31, 2016
+  
+Post-policy cohort:
+  - Start date: November 1, 2018
+  - End date: October 31, 2019
+
+```{r cohort stratification 3}
+
+tx_list_cohort_3 <- do_data_wrangling(input_tx_list = tx_list, 
+                  pre_policy_start = as.Date("2015-11-01"),
+                  pre_policy_end = as.Date("2016-10-31"),
+                  post_policy_start = as.Date("2018-11-01"),
+                  post_policy_end = as.Date("2019-10-31"))
+
+(num_tx_per_cohort_3 <- tx_list_cohort_3 %>% 
+  select(PX_ID, policy) %>% 
+  group_by(policy) %>% 
+  count())
+```
+
+# 7. Cohort Stratification (Pre-policy cohort #4)
+
+Pre-policy cohort #4:
+  - Start date: November 1, 2015
+  - End date: October 17, 2018
+
+Post-policy cohort:
+  - Start date: November 1, 2018
+  - End date: October 31, 2019
+
+```{r cohort stratification 4}
+
+tx_list_cohort_4 <- do_data_wrangling(input_tx_list = tx_list, 
+                  pre_policy_start = as.Date("2015-11-01"),
+                  pre_policy_end = as.Date("2018-10-17"),
+                  post_policy_start = as.Date("2018-11-01"),
+                  post_policy_end = as.Date("2019-10-31"))
+
+(num_tx_per_cohort_4 <- tx_list_cohort_4 %>% 
+  select(PX_ID, policy) %>% 
+  group_by(policy) %>% 
+  count())
+```
