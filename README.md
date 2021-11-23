@@ -1,4 +1,4 @@
-# post_transplant_survival_new_policy
+# An Updated Estimate of Post-transplant Survival After Implementation of the New Donor Heart Allocation Policy
 
 This repository contains all code used to perform analyses and generate results for the manuscript "An Updated Estimate of Post-transplant Survival After Implementation of the New Donor Heart Allocation Policy."
 
