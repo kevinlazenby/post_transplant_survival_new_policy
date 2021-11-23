@@ -10,24 +10,25 @@ Description of each script:
 
 - data_wrangling.Rmd: Run this script second. It imports the data and prepares it for analysis.
 
+
 - kaplan_meier_model.Rmd: Generates Figure 1.
 
 
-- survival_by_treatment_type.Rmd: Generates Figure 2 and eFigure 4.
+- survival_by_treatment_type.Rmd: Generates Figure 3 and Figure S2.
 
 
-- recipient_characteristics.Rmd: Generates Table 1.
+- recipient_characteristics.Rmd: Generates Table 1 and Table S2.
 
 
-- truncated_follow_up_demonstration.Rmd: Generates eFigure 1.
+- truncated_follow_up_demonstration.Rmd: Generates Figure 2.
 
 
-- data_visualization.Rmd: Generates eFigure 2 and results reported in the manuscript.
+- data_visualization.Rmd: Generates certain results reported in the manuscript.
 
 
-- survival_probability_demonstration.Rmd: Generates eFigure 3.
+- survival_probability_demonstration.Rmd: Generates Figure S1.
 
 
-- cox_ph_model.Rmd: Generates eTable 1.
+- cox_ph_model.Rmd: Generates Table S1 and Table S3.
 
 
