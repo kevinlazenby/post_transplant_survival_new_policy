@@ -207,7 +207,7 @@ post_tx_survival_no_MCS[[4]] %>%
   select(post_policy, time, lower, surv, upper)
 ```
 
-# 9. Assembling Figure 2
+# 9. Assembling Figure 3
 
 ```{r}
 plot_1A <- post_tx_survival_ecmo[[2]]$plot + 
@@ -220,7 +220,8 @@ table_1A <- post_tx_survival_ecmo[[2]]$table +
   rremove("x.title") +
   rremove("y.title") +
   rremove("x.grid") +
-  rremove("y.grid")
+  rremove("y.grid") +
+  theme(axis.text = element_text(size = 24), title = element_text(size = 24))
   
 plot_1B <- post_tx_survival_iabp[[2]]$plot +
   rremove("x.title") +
@@ -232,7 +233,8 @@ table_1B <- post_tx_survival_iabp[[2]]$table +
   rremove("x.title") +
   rremove("y.title") +
   rremove("x.grid") +
-  rremove("y.grid")  
+  rremove("y.grid") +
+  theme(axis.text = element_text(size = 24), title = element_text(size = 24))
 
 plot_1C <- post_tx_survival_ventilator[[2]]$plot +
   rremove("x.title") +
@@ -244,7 +246,8 @@ table_1C <- post_tx_survival_ventilator[[2]]$table +
   rremove("x.title") +
   rremove("y.title") +
   rremove("x.grid") +
-  rremove("y.grid") 
+  rremove("y.grid") +
+  theme(axis.text = element_text(size = 24), title = element_text(size = 24))
 
 plot_1D <- post_tx_survival_durable_lvad[[2]]$plot +
   rremove("x.title") +
@@ -256,24 +259,23 @@ table_1D <- post_tx_survival_durable_lvad[[2]]$table +
   rremove("x.title") +  
   rremove("y.title") +
   rremove("x.grid") +
-  rremove("y.grid") 
+  rremove("y.grid") +
+  theme(axis.text = element_text(size = 24), title = element_text(size = 24))
 
-figure_2 <- ggarrange(plot_1A, plot_1B, table_1A, table_1B,
+figure_3 <- ggarrange(plot_1A, plot_1B, table_1A, table_1B,
           plot_1C, plot_1D, table_1C, table_1D,
           ncol = 2, nrow = 4, common.legend = TRUE,
           labels = list("A", "B", "", "", "C", "D", "", ""),
           label.x = c(0.05, 0.06, 0, 0, 0.05, 0.06, 0, 0),
-          label.y = c(0.275, 0.275, 0, 0, 0.275, 0.275, 0, 0),
+          label.y = c(0.3, 0.3, 0, 0, 0.3, 0.3, 0, 0),
           heights = c(0.375, 0.125, 0.375, 0.125, 0.375, 0.125, 0.375, 0.125),
-          font.label = list(size = 24, face = "bold")) %>%
-  annotate_figure(bottom = text_grob("Time (days)"),
-                  left = text_grob("Survival probability", rot = 90))
-
-figure_2
+          font.label = list(size = 96, face = "bold")) %>%
+  annotate_figure(bottom = text_grob("Time (days)", face = "bold", size = 30),
+                  left = text_grob("Survival probability", rot = 90, face = "bold", size = 30))
 
 ```
 
-# 10. Assembling eFigure 4
+# 10. Assembling Figure S2
 
 ```{r}
 plot_2A <- post_tx_survival_low_dose_inotropes[[2]]$plot + 
@@ -286,7 +288,8 @@ table_2A <- post_tx_survival_low_dose_inotropes[[2]]$table +
   rremove("x.title") +
   rremove("y.title") +
   rremove("x.grid") +
-  rremove("y.grid")
+  rremove("y.grid") +
+  theme(axis.text = element_text(size = 24), title = element_text(size = 24))
   
 plot_2B <- post_tx_survival_high_dose_inotropes[[2]]$plot +
   rremove("x.title") +
@@ -298,7 +301,8 @@ table_2B <- post_tx_survival_high_dose_inotropes[[2]]$table +
   rremove("x.title") +
   rremove("y.title") +
   rremove("x.grid") +
-  rremove("y.grid")  
+  rremove("y.grid") +
+  theme(axis.text = element_text(size = 24), title = element_text(size = 24))  
 
 plot_2C <- post_tx_survival_other_MCS[[2]]$plot +
   rremove("x.title") +
@@ -310,7 +314,8 @@ table_2C <- post_tx_survival_other_MCS[[2]]$table +
   rremove("x.title") +
   rremove("y.title") +
   rremove("x.grid") +
-  rremove("y.grid") 
+  rremove("y.grid") +
+  theme(axis.text = element_text(size = 24), title = element_text(size = 24))  
 
 plot_2D <- post_tx_survival_no_MCS[[2]]$plot +
   rremove("x.title") +
@@ -322,19 +327,18 @@ table_2D <- post_tx_survival_no_MCS[[2]]$table +
   rremove("x.title") +  
   rremove("y.title") +
   rremove("x.grid") +
-  rremove("y.grid") 
+  rremove("y.grid") +
+  theme(axis.text = element_text(size = 24), title = element_text(size = 24))  
 
-e_figure <- ggarrange(plot_2A, plot_2B, table_2A, table_2B,
+figure_s2 <- ggarrange(plot_2A, plot_2B, table_2A, table_2B,
           plot_2C, plot_2D, table_2C, table_2D,
           ncol = 2, nrow = 4, common.legend = TRUE,
           labels = list("A", "B", "", "", "C", "D", "", ""),
-          label.x = c(0.06, 0.06, 0, 0, 0.06, 0.06, 0, 0),
-          label.y = c(0.275, 0.275, 0, 0, 0.275, 0.275, 0, 0),
+          label.x = c(0.05, 0.06, 0, 0, 0.05, 0.06, 0, 0),
+          label.y = c(0.3, 0.3, 0, 0, 0.3, 0.3, 0, 0),
           heights = c(0.375, 0.125, 0.375, 0.125, 0.375, 0.125, 0.375, 0.125),
-          font.label = list(size = 24, face = "bold")) %>%
-  annotate_figure(bottom = text_grob("Time (days)"),
-                  left = text_grob("Survival probability", rot = 90))
-
-e_figure
+          font.label = list(size = 96, face = "bold")) %>%
+  annotate_figure(bottom = text_grob("Time (days)", face = "bold", size = 30),
+                  left = text_grob("Survival probability", rot = 90, face = "bold", size = 30))
 
 ```

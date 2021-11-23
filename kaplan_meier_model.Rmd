@@ -50,7 +50,27 @@ post_tx_survival_cohort_1 <- construct_km_model(
   input_cohort_list = tx_list_cohort_1,
   y_limits = c(0.85, 1),
   legend_position = c(0.8, 0.8),
-  plot_title = NULL)
+  plot_title = NULL,
+  risk_table_fontsize = 12,
+  font_x = 24,
+  font_y = 24,
+  font_ticks = 24,
+  font_legend = 30)
+
+post_tx_survival_cohort_1[[2]]$plot <- post_tx_survival_cohort_1[[2]]$plot +
+  rremove("x.grid") + 
+  theme(legend.box.background = element_rect(size = 2.5), 
+        legend.title = element_text(size = 0))
+
+post_tx_survival_cohort_1[[2]]$table <- post_tx_survival_cohort_1[[2]]$table +
+  rremove("x.grid") + 
+  rremove("y.grid")
+
+post_tx_survival_cohort_1[[2]]$table <- post_tx_survival_cohort_1[[2]]$table +
+  theme(axis.title.y = element_blank(), 
+        axis.text = element_text(size = 24), 
+        title = element_text(size = 24), 
+        axis.title.x = element_text(size = 24))
 
 post_tx_survival_cohort_1[[2]]
 

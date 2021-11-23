@@ -33,6 +33,7 @@ library(vistime)
 library(stargazer)
 library(kableExtra)
 library(summarytools)
+library(tab)
 library(here)
 
 here::i_am("function_definitions.Rmd")
@@ -413,22 +414,6 @@ do_data_wrangling <- function(input_tx_list = NULL,
         inotropes == "Y" ~ 1,
         TRUE ~ 0),
       
-      high_dose_inotropes = case_when(
-        REC_INOTROP == 1 & 
-          (CAN_LAST_STAT == 2010 | 
-             CAN_LAST_STAT == 2110 | 
-             CAN_LAST_STAT == 2120 |
-             CAN_LAST_STAT == 2130) ~ 1,
-        TRUE ~ 0),
-      
-      low_dose_inotropes = case_when(
-        REC_INOTROP == 1 & 
-          !(CAN_LAST_STAT == 2010 | 
-             CAN_LAST_STAT == 2110 | 
-             CAN_LAST_STAT == 2120 |
-             CAN_LAST_STAT == 2130) ~ 1,
-        TRUE ~ 0),
-      
       # Recipient pretransplant mechanical ventilatory support
       ventilator = case_when(
         REC_VENTILATOR == 1 ~ paste0("Y"),
@@ -485,12 +470,8 @@ do_data_wrangling <- function(input_tx_list = NULL,
       
       # Recipient extracorporeal membrane oxygenation
       ECMO = case_when(
-        REC_ECMO == 1 ~ paste0("Y"),
-        REC_ECMO == 0 ~ paste0("N")),
-      
-      ECMO = case_when(
-        ECMO == "Y" ~ 1,
-        TRUE ~ 0),
+        REC_ECMO == 1 ~ 1,
+        REC_ECMO == 0 ~ 0),
       
       other_MCS = case_when(
         REC_VAD_TY != 1 & durable_LVAD == 0 ~ 1,
@@ -502,6 +483,20 @@ do_data_wrangling <- function(input_tx_list = NULL,
           ventilator == 0 & 
           durable_LVAD == 0 & 
           other_MCS == 0 ~ 1,
+        TRUE ~ 0),
+      
+      # candidates at Status 1B or Status 3 who were on high-dose inotropic 
+      # support or supported by multiple inotropes
+      high_dose_inotropes = case_when(
+        REC_INOTROP == 1 & REC_VAD_TY == 1 & 
+          ((CAN_LAST_STAT == 2010 & ECMO == 0 & IABP == 0) | 
+             CAN_LAST_STAT == 2130) ~ 1, 
+        TRUE ~ 0),
+      
+      # candidates at Old Status 2 or New Status 4 who were on inotropic support
+      low_dose_inotropes = case_when(
+        REC_INOTROP == 1 & REC_VAD_TY == 1 &
+          (CAN_LAST_STAT == 2020 | CAN_LAST_STAT == 2140) ~ 1,
         TRUE ~ 0),
       
       # Recipient last waitlist status
@@ -614,7 +609,11 @@ construct_km_model <- function(input_cohort_list = NULL,
                                y_limits = c(0, 1),
                                legend_position = c(0.9, 0.8),
                                plot_title = "1-year K-M survival analysis",
-                               risk_table_fontsize = 4.5) {
+                               risk_table_fontsize = 14,
+                               font_x = 28,
+                               font_y = 28,
+                               font_ticks = 28,
+                               font_legend = 24) {
   
   mean_surv_time_by_cohort <- c(
     pre_policy = input_cohort_list %>% 
@@ -646,12 +645,17 @@ construct_km_model <- function(input_cohort_list = NULL,
     risk.table.y.text.col = TRUE,    
     risk.table.y.text = TRUE,
     risk.table.fontsize = risk_table_fontsize,
+    font.x = c(font_x, "bold"),
+    font.y = c(font_y, "bold"),
+    font.tickslab = c(font_ticks, "plain"),
+    font.legend = c(font_legend, "bold"),
     ncensor.plot = FALSE,
     surv.median.line = "none", 
     legend.labs = 
-      c("Pre-policy", "Post-policy"),
-    legend = legend_position,          
-    palette = "jama",             
+      c(" Pre-policy", " Post-policy"),
+    legend = legend_position,
+    legend.title = "",
+    palette = "uchicago",             
     xlim = c(0, 365),             
     linetype = c("solid", "solid"), 
     ylim = y_limits,     

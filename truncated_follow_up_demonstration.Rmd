@@ -133,6 +133,19 @@ post_tx_survival_truncated_cohort_1[[4]] %>%
   filter(time >= 364 & time <= 365, post_policy == 1) %>% 
   select(post_policy, time, lower, surv, upper)
 
+cox_ph_cohort_list <- tx_list_truncated_cohort_1
+
+# run an unadjusted Cox proportional hazards model
+cox_ph_model_truncated_1 <- coxph(Surv(surv_time_365, status_365) ~ 
+                               post_policy,
+                             data = cox_ph_cohort_list)
+   
+cox_ph_table_truncated_1 <- cox_ph_model_truncated_1 %>% tabcoxph(
+  columns = c('beta.se', 'hr.ci', 'z', 'p'),
+  var.labels = list(post_policy = "Transplant after policy change"))
+
+cox_ph_model_summary_truncated_1 <- cox_ph_model_truncated_1 %>% summary()
+
 ```
 
 # 7. Kaplan-Meier survival model with truncated follow-up #2
@@ -155,6 +168,18 @@ post_tx_survival_truncated_cohort_2[[4]] %>%
   filter(time >= 364 & time <= 365, post_policy == 1) %>% 
   select(post_policy, time, lower, surv, upper)
 
+cox_ph_cohort_list <- tx_list_truncated_cohort_2
+
+# run an unadjusted Cox proportional hazards model
+cox_ph_model_truncated_2 <- coxph(Surv(surv_time_365, status_365) ~ 
+                               post_policy,
+                             data = cox_ph_cohort_list)
+   
+cox_ph_table_truncated_2 <- cox_ph_model_truncated_2 %>% tabcoxph(
+  columns = c('beta.se', 'hr.ci', 'z', 'p'),
+  var.labels = list(post_policy = "Transplant after policy change"))
+
+cox_ph_model_summary_truncated_2 <- cox_ph_model_truncated_2 %>% summary()
 ```
 
 # 8. Kaplan-Meier survival model with truncated follow-up #3
@@ -176,6 +201,19 @@ post_tx_survival_truncated_cohort_3[[4]] %>%
 post_tx_survival_truncated_cohort_3[[4]] %>% 
   filter(time >= 364 & time <= 365, post_policy == 1) %>% 
   select(post_policy, time, lower, surv, upper)
+
+cox_ph_cohort_list <- tx_list_truncated_cohort_3
+
+# run an unadjusted Cox proportional hazards model
+cox_ph_model_truncated_3 <- coxph(Surv(surv_time_365, status_365) ~ 
+                               post_policy,
+                             data = cox_ph_cohort_list)
+   
+cox_ph_table_truncated_3 <- cox_ph_model_truncated_3 %>% tabcoxph(
+  columns = c('beta.se', 'hr.ci', 'z', 'p'),
+  var.labels = list(post_policy = "Transplant after policy change"))
+
+cox_ph_model_summary_truncated_3 <- cox_ph_model_truncated_3 %>% summary()
 
 ```
 
@@ -199,9 +237,21 @@ post_tx_survival_truncated_cohort_4[[4]] %>%
   filter(time >= 364 & time <= 365, post_policy == 1) %>% 
   select(post_policy, time, lower, surv, upper)
 
+cox_ph_cohort_list <- tx_list_truncated_cohort_4
+
+# run an unadjusted Cox proportional hazards model
+cox_ph_model_truncated_4 <- coxph(Surv(surv_time_365, status_365) ~ 
+                               post_policy,
+                             data = cox_ph_cohort_list)
+   
+cox_ph_table_truncated_4 <- cox_ph_model_truncated_4 %>% tabcoxph(
+  columns = c('beta.se', 'hr.ci', 'z', 'p'),
+  var.labels = list(post_policy = "Transplant after policy change"))
+
+cox_ph_model_summary_truncated_4 <- cox_ph_model_truncated_4 %>% summary()
 ```
 
-# 10. Assembling eFigure 1
+# 10. Assembling Figure 2
 
 ```{r}
 plot_e1A <- post_tx_survival_truncated_cohort_1[[2]]$plot + 
@@ -214,7 +264,8 @@ table_e1A <- post_tx_survival_truncated_cohort_1[[2]]$table +
   rremove("x.title") +
   rremove("y.title") +
   rremove("x.grid") +
-  rremove("y.grid")
+  rremove("y.grid") +
+  theme(axis.text = element_text(size = 24), title = element_text(size = 24))
   
 plot_e1B <- post_tx_survival_truncated_cohort_2[[2]]$plot +
   rremove("x.title") +
@@ -226,7 +277,8 @@ table_e1B <- post_tx_survival_truncated_cohort_2[[2]]$table +
   rremove("x.title") +
   rremove("y.title") +
   rremove("x.grid") +
-  rremove("y.grid")  
+  rremove("y.grid") +
+  theme(axis.text = element_text(size = 24), title = element_text(size = 24))
 
 plot_e1C <- post_tx_survival_truncated_cohort_3[[2]]$plot +
   rremove("x.title") +
@@ -238,7 +290,8 @@ table_e1C <- post_tx_survival_truncated_cohort_3[[2]]$table +
   rremove("x.title") +
   rremove("y.title") +
   rremove("x.grid") +
-  rremove("y.grid") 
+  rremove("y.grid") +
+  theme(axis.text = element_text(size = 24), title = element_text(size = 24))
 
 plot_e1D <- post_tx_survival_truncated_cohort_4[[2]]$plot +
   rremove("x.title") +
@@ -250,19 +303,18 @@ table_e1D <- post_tx_survival_truncated_cohort_4[[2]]$table +
   rremove("x.title") +  
   rremove("y.title") +
   rremove("x.grid") +
-  rremove("y.grid") 
+  rremove("y.grid") +
+  theme(axis.text = element_text(size = 24), title = element_text(size = 24))
 
-e_figure_1 <- ggarrange(plot_e1A, plot_e1B, table_e1A, table_e1B,
+figure_2 <- ggarrange(plot_e1A, plot_e1B, table_e1A, table_e1B,
           plot_e1C, plot_e1D, table_e1C, table_e1D,
           ncol = 2, nrow = 4, common.legend = TRUE,
           labels = list("A", "B", "", "", "C", "D", "", ""),
           label.x = c(0.05, 0.06, 0, 0, 0.05, 0.06, 0, 0),
-          label.y = c(0.275, 0.275, 0, 0, 0.275, 0.275, 0, 0),
+          label.y = c(0.3, 0.3, 0, 0, 0.3, 0.3, 0, 0),
           heights = c(0.375, 0.125, 0.375, 0.125, 0.375, 0.125, 0.375, 0.125),
-          font.label = list(size = 24, face = "bold")) %>%
-  annotate_figure(bottom = text_grob("Time (days)"),
-                  left = text_grob("Survival probability", rot = 90))
-
-e_figure_1
+          font.label = list(size = 96, face = "bold")) %>%
+  annotate_figure(bottom = text_grob("Time (days)", face = "bold", size = 30),
+                  left = text_grob("Survival probability", rot = 90, face = "bold", size = 30))
 
 ```

@@ -40,7 +40,7 @@ st_options(style = "rmarkdown", plain.ascii = FALSE, footnote = NA)
 ```{r}
 
 univariate_cox_ph_models <- construct_univariate_cox_ph_models(
-  input_cohort_list = tx_list_cohort_1)
+  input_cohort_list = tx_list_cohort_4)
 
 univariate_cox_ph_models
 

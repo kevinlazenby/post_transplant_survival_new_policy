@@ -42,74 +42,27 @@ survival_probs <- tibble(
   surv_prob_1_year = vector("double", length = 487),
   median_time_at_risk = vector("double", length = 487),
   upper_bound_CI = vector("double", length = 487),
-  lower_bound_CI = vector("double", length = 487))
+  lower_bound_CI = vector("double", length = 487),
+  cox_ph_hr = vector("double", length = 487),
+  cox_ph_hr_upper_CI = vector("double", length = 487),
+  cox_ph_hr_lower_CI = vector("double", length = 487),
+  cox_ph_hr_p = vector("double", length = 487))
 
 policy_switch_date <- as.Date("2018-10-18")
 cohort_end_date <- as.Date("2019-10-31")
 analysis_date <- as.Date("2019-11-01")
 
-# Getting recipients transplanted between 11/01/2018 and 10/31/2019
-tx_list_since_new_policy <- tx_list_cohort_1 %>%
-  filter(post_policy == 1) %>% 
-  mutate(old_fu_date = last_fu_date, old_status = last_status)
-
 for (i in seq_along(survival_probs$elapsed_time)) {
 
   survival_probs$elapsed_time[[i]] <- analysis_date - policy_switch_date
   
-  # Selecting the most recent follow-up information from txf_list
-  old_follow_up_info <- txf_list %>%
-    filter(TFL_PX_STAT_DT <= analysis_date) %>%
-    group_by(PX_ID) %>%
-    slice_max(TFL_PX_STAT_DT, with_ties = FALSE) %>%
-    ungroup()
-
-  # Adding follow-up information from txf_list to tx_list
-  tx_list_since_new_policy <- tx_list_since_new_policy %>%
-    select(PX_ID, tx_date, last_fu_date, last_status, old_fu_date, old_status) %>% 
-    left_join(old_follow_up_info %>%
-                select(PX_ID, TFL_PX_STAT, TFL_PX_STAT_DT), by = "PX_ID")
-
-  # Loop to amend follow-up information in order to artificially truncate follow-up
-  for (j in seq_along(tx_list_since_new_policy$PX_ID)) {
-
-    if (tx_list_since_new_policy$last_fu_date[[j]] > analysis_date) {
-
-      if (!is.na(tx_list_since_new_policy$TFL_PX_STAT_DT[[j]]) &&
-          !is.na(tx_list_since_new_policy$TFL_PX_STAT[[j]])) {
-
-        tx_list_since_new_policy$old_fu_date[[j]] <-
-          tx_list_since_new_policy$TFL_PX_STAT_DT[[j]]
-
-        tx_list_since_new_policy$old_status[[j]] <-
-          tx_list_since_new_policy$TFL_PX_STAT[[j]]
-
-      } else {
-
-        tx_list_since_new_policy$old_fu_date[[j]] <- analysis_date
-        tx_list_since_new_policy$old_status[[j]] <- "N"
-      }
-    } else {
-      
-      tx_list_since_new_policy$old_fu_date[[j]] <- 
-        tx_list_since_new_policy$last_fu_date[[j]]
-      
-      tx_list_since_new_policy$old_status[[j]] <-
-        tx_list_since_new_policy$last_status[[j]]
-    }
-  }
+  tx_list_truncated <- truncate_follow_up(
+    input_cohort_list = tx_list_cohort_1,
+    input_follow_up_list = txf_list,
+    analysis_date = as.Date(analysis_date))
   
-  surv_list_since_new_policy <- tx_list_since_new_policy %>% 
-    mutate(surv_time = as.numeric(old_fu_date - tx_date),
-          surv_time_365 = ifelse(surv_time >= 365, 365, surv_time),
-          status = case_when(
-            (old_status == "A" | old_status == "L" | old_status == "N") ~ 0,
-            (old_status == "D" | old_status == "R") ~ 1),
-          status_365 = ifelse(surv_time >= 365, 0, status)) %>%
-    select(PX_ID, surv_time, surv_time_365, status, status_365)
-
-  survival_since_new_policy <- survfit(Surv(surv_time_365, status_365) ~ 1,
-                                data = surv_list_since_new_policy,
+  survival_since_new_policy <- survfit(Surv(surv_time_365, status_365) ~ post_policy,
+                                data = tx_list_truncated,
                                 stype = 1,
                                 ctype = 1,
                                 conf.type = "log")
@@ -117,17 +70,20 @@ for (i in seq_along(survival_probs$elapsed_time)) {
   survival_summary <- surv_summary(survival_since_new_policy)
   
   survival_probs$median_time_at_risk[[i]] <- 
-    surv_list_since_new_policy %>% pull(surv_time) %>% median()
+    tx_list_truncated %>% filter(post_policy == 1) %>% 
+    pull(surv_time) %>% median()
   
-  if (nrow(survival_summary %>% filter(time == 365) %>% select(surv)) != 0) {
+  
+  if (nrow(survival_summary %>% filter(post_policy == 1, time == 365) %>% 
+           select(surv)) != 0) {
     survival_probs$surv_prob_1_year[[i]] <- 
-      survival_summary %>% filter(time == 365) %>% pull(surv)
+      survival_summary %>% filter(post_policy == 1, time == 365) %>% pull(surv)
     
     survival_probs$lower_bound_CI[[i]] <- 
-      survival_summary %>% filter(time == 365) %>% pull(lower)
+      survival_summary %>% filter(post_policy == 1, time == 365) %>% pull(lower)
     
     survival_probs$upper_bound_CI[[i]] <- 
-      survival_summary %>% filter(time == 365) %>% pull(upper)
+      survival_summary %>% filter(post_policy == 1, time == 365) %>% pull(upper)
     
   } else {
     survival_probs$surv_prob_1_year[[i]] <- 0
@@ -135,45 +91,69 @@ for (i in seq_along(survival_probs$elapsed_time)) {
     survival_probs$upper_bound_CI[[i]] <- 0
   }
   
+  cox_ph_cohort_list <- tx_list_truncated
+  
+  # run an unadjusted Cox proportional hazards model
+  cox_ph_model <- coxph(Surv(surv_time_365, status_365) ~ 
+                          post_policy,
+                        data = cox_ph_cohort_list)
+  
+  cox_ph_model_summary <- cox_ph_model %>% summary()
+  
+  survival_probs$cox_ph_hr[[i]] <- cox_ph_model_summary$coefficients[1,2]
+  survival_probs$cox_ph_hr_upper_CI[[i]] <- cox_ph_model_summary$conf.int[1,3]
+  survival_probs$cox_ph_hr_lower_CI[[i]] <- cox_ph_model_summary$conf.int[1,4]
+  survival_probs$cox_ph_hr_p[[i]] <- cox_ph_model_summary$coefficients[1,5]
+
   analysis_date <- analysis_date + 1
+  
 }
 
-survival_probs_post_policy <- survival_probs
-save(survival_probs_post_policy, file = "survival_probs_post_policy.RData")
+survival_probs_unadjusted_cox_ph <- survival_probs
+save(survival_probs_unadjusted_cox_ph, file = "survival_probs_unadjusted_cox_ph.RData")
+```
 
-surv_prob_plot_post_policy <- ggplot(data = survival_probs_post_policy,
+# 2. Plotting (must load in .RData files before running)
+
+```{r}
+
+policy_switch_date <- as.Date("2018-10-18")
+
+surv_prob_plot_post_policy <- ggplot(data = survival_probs_with_cox_ph,
        mapping = aes(x = as.Date(policy_switch_date + days(elapsed_time)),
                      y = surv_prob_1_year)) +
   geom_line() +
-  geom_ribbon(aes(ymin = survival_probs_post_policy$lower_bound_CI,
-              ymax = survival_probs_post_policy$upper_bound_CI),
+  geom_ribbon(aes(ymin = lower_bound_CI,
+              ymax = upper_bound_CI),
               alpha = 0.1) +
   ylim(0.725, 0.95) +
-  ylab("1-year survival probability") +
-  scale_x_date(date_breaks = "3 months") +
+  ylab("Kaplan-Meier 1-year survival probability") +
+  scale_x_date(date_breaks = "3 months", date_labels = "%B %Y") +
   custom_theme() +
   rremove("xlab") +
   rremove("x.grid") +
-  scale_color_jama()
+  scale_color_uchicago()
 
-time_at_risk_plot_post_policy <- ggplot(data = survival_probs_post_policy,
-       mapping = aes(x = as.Date(policy_switch_date + days(elapsed_time)),
-                     y = median_time_at_risk)) +
-  geom_line() +
-  ylab("Median time at risk (days)") +
-  scale_y_continuous(breaks = seq(150, 390, 30)) +
-  scale_x_date(date_breaks = "3 months") +
+surv_prob_cph_plot <- ggplot(data = survival_probs_unadjusted_cox_ph,
+       mapping = aes(x = as.Date(policy_switch_date + days(elapsed_time)))) +
+  geom_line(aes(y = cox_ph_hr)) +
+  geom_ribbon(aes(ymin = cox_ph_hr_lower_CI,
+              ymax = cox_ph_hr_upper_CI),
+              alpha = 0.1) +
+  ylab("Unadjusted Cox HR of transplant post-policy") +
+  scale_x_date(date_breaks = "3 months", date_labels = "%B %Y") +
   custom_theme() +
   rremove("xlab") +
   rremove("x.grid") +
-  scale_color_jama()
+  scale_color_uchicago()
 
-e_figure_3 <- ggarrange(surv_prob_plot_post_policy, time_at_risk_plot_post_policy, 
+figure_s1 <- ggarrange(surv_prob_plot_post_policy, surv_prob_cph_plot,
           ncol = 2, nrow = 1,
           labels = list("A", "B"),
-          label.x = c(0.9, 0.9),
+          label.x = c(0.1, 0.1),
           label.y = c(0.1, 0.1),
           font.label = list(size = 24, face = "bold")) %>%
 
   annotate_figure(bottom = text_grob("Date of last available follow-up"))
+
 ```
