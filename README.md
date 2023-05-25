@@ -1,6 +1,6 @@
 # An Updated Estimate of Post-transplant Survival After Implementation of the New Donor Heart Allocation Policy
 
-This repository contains all code used to perform analyses and generate results for the manuscript "An Updated Estimate of Post-transplant Survival After Implementation of the New Donor Heart Allocation Policy."
+This repository contains all code used to perform analyses and generate results for the manuscript "An Updated Estimate of Post-transplant Survival After Implementation of the New Donor Heart Allocation Policy," published in the American Journal of Transplantation and accessible online [here](https://doi.org/10.1111/ajt.16931).
 
 Description of each script:
 
